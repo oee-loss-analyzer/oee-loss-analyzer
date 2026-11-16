@@ -16,7 +16,7 @@
       </div>
     </div>
     <nav class="tabs" id="tabs">
-      <button data-tab="live" class="active">실시간 현장</button>
+      <button data-tab="live" class="active">실시간 현장 (시뮬레이션)</button>
       <button data-tab="analysis">손실 분석</button>
       <button data-tab="report">주간 리포트</button>
       <button data-tab="data">데이터 연결</button>
@@ -27,6 +27,10 @@
   <main>
     <!-- 실시간 -->
     <section id="tab-live" class="tab active">
+      <div class="sim-note">
+        <b>가상 공장 시뮬레이션</b> · 발표 시간 안에 하루(08:00~17:00)를 보여 드리려고 가상 공장을 빨리 감기로 돌리는 화면입니다.
+        실제 공장에 설치하면 배속 없이 <b>실제 시간(×1)</b>으로, 기계에 붙은 센서 데이터를 받아 똑같은 방식으로 분석합니다.
+      </div>
       <div class="toolbar">
         <div class="clock"><span id="liveDate">-</span> <b id="liveClock">--:--</b></div>
         <button id="btnStart" class="primary">▶ 시작</button>
@@ -34,6 +38,7 @@
         <button id="btnReset" title="오늘 하루를 처음부터 다시 시뮬레이션">↺ 오늘 다시</button>
         <label>속도
           <select id="speed">
+            <option value="1">×1 (실제 속도)</option>
             <option value="30">×30 (1초=30초)</option>
             <option value="60" selected>×60 (1초=1분)</option>
             <option value="120">×120</option>

@@ -27,6 +27,7 @@ export class LiveEngine extends EventEmitter {
     this.pause();
     this.date = date ?? todayLocal();
     this.simSec = SHIFT.start - 60;
+    this.carry = 0;
     this.ended = false;
     this.machines = MACHINES.map((m) => {
       const truth = simulateDay(m, this.date, { seed: `live|${m.id}|${this.date}|${Math.floor(this.rng.next() * 1e9)}` });
@@ -61,8 +62,10 @@ export class LiveEngine extends EventEmitter {
   }
 
   tick() {
-    const target = Math.min(SHIFT.end, this.simSec + (this.speed * TICK_MS) / 1000);
-    while (this.simSec < target) {
+    // 배속이 낮으면(×1 등) 한 틱에 1초가 안 될 수 있어 남은 시간을 모아 둔다
+    this.carry = (this.carry ?? 0) + (this.speed * TICK_MS) / 1000;
+    while (this.carry >= 1 && this.simSec < SHIFT.end) {
+      this.carry -= 1;
       this.simSec += 1;
       for (const st of this.machines) this.step(st, this.simSec);
     }
