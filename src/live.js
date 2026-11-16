@@ -2,7 +2,7 @@
 // 설비가 2분 넘게 멈추면 작업자에게 "왜 멈췄나요?" 질문을 만든다.
 
 import { EventEmitter } from 'node:events';
-import { MACHINES, SHIFT, DETECTION } from './config.js';
+import { SIM_MACHINES as MACHINES, SHIFT, DETECTION } from './config.js';
 import { simulateDay, makeCurrentSampler, UTTERANCES } from './sim/factory.js';
 import { buildDayFromStates } from './core/canonical.js';
 import { classifyByRules, classifyReason } from './reasons/classifier.js';

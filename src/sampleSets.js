@@ -2,7 +2,7 @@
 // 파일을 디스크에 두지 않고 요청이 올 때 만든다 (일주일치 전류 로그는 약 9MB라 저장소에 넣기엔 크다).
 // 같은 날짜는 언제 만들어도 같은 내용이다 (난수 seed = sample|설비|날짜, sample-data/ 와 동일).
 
-import { MACHINES } from './config.js';
+import { SIM_MACHINES as MACHINES } from './config.js';
 import { simulateDay } from './sim/factory.js';
 import { FORMATS, encodeDefectLog } from './sim/formats.js';
 import { addDays } from './core/time.js';

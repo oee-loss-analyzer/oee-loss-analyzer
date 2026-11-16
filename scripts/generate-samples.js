@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MACHINES } from '../src/config.js';
+import { SIM_MACHINES as MACHINES } from '../src/config.js';
 import { simulateDay } from '../src/sim/factory.js';
 import { FORMATS, encodeDefectLog } from '../src/sim/formats.js';
 

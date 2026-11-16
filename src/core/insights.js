@@ -204,7 +204,7 @@ export function buildReport(results, dayMap, { prevResults = [], from, to } = {}
       availability: round(total.availability), performance: round(total.performance), quality: round(total.quality),
       lossHours: Object.fromEntries(Object.entries(total.losses).map(([k, v]) => [LOSS[k].label, round(v / 3600)])),
       lossWon: Math.round(total.totalLossWon), responseRate: total.responseRate == null ? null : round(total.responseRate),
-      machines: stats.map((s) => ({
+      machines: stats.filter((s) => s.days).map((s) => ({
         name: s.name, oee: round(s.agg.oee), lossHours: Object.fromEntries(Object.entries(s.agg.losses).filter(([, v]) => v > 0).map(([k, v]) => [LOSS[k].label, round(v / 3600)])),
         breakdowns: s.breakdowns, mttrMin: s.mttrMin && Math.round(s.mttrMin), avgSetupMin: s.avgSetupMin && Math.round(s.avgSetupMin),
       })),

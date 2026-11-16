@@ -35,7 +35,16 @@ export const MACHINES = [
     idealCycleSec: 30, runCurrentA: 21, peakCurrentA: 38, idleCurrentA: 4.5,
     marginPerPart: 650, source: 'opcua',
   },
+  // 실제 공개 데이터용 설비: 벽돌 생산라인 (Zenodo, CC BY 4.0). 정지 기록만 있고 전류 신호가 없어 시뮬레이션(sim: false)은 하지 않는다.
+  //  idealCycleSec 는 원본의 "계획시간 ÷ 이론 생산량"(약 0.46초/장)에서, marginPerPart 는 벽돌 1장 이익을 가정한 값이다.
+  {
+    id: 'CLAY-LINE', name: '벽돌 라인 (공개 데이터)', type: 'line',
+    idealCycleSec: 0.46, marginPerPart: 30, source: 'mes', sim: false,
+  },
 ];
+
+// 가상 공장 시뮬레이터(실시간 현장 · 예시 파일)가 돌리는 설비
+export const SIM_MACHINES = MACHINES.filter((m) => m.sim !== false);
 
 // 전류 → 상태 판정 기준 (설비별 runCurrent 대비 비율)
 export const DETECTION = {

@@ -13,7 +13,7 @@ import { listSamples, buildSampleText, sampleFileName, SAMPLE_FILES } from './sr
 import { parseFile } from './src/ingest/parsers.js';
 import { aggregate } from './src/core/oee.js';
 import { hourlyLoss, reasonStats, machineStats, dailyTrend, findInsights, buildReport } from './src/core/insights.js';
-import { classifyReason, llmEnabled, writeReportWithClaude, LLM_MODEL } from './src/reasons/classifier.js';
+import { classifyReason, classifyByRules, llmEnabled, writeReportWithClaude, LLM_MODEL } from './src/reasons/classifier.js';
 import { generateSamples } from './scripts/generate-samples.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +47,8 @@ function liveState() {
 
 // ---------- 분석 ----------
 function resolveRange(q) {
-  const dates = store.dates();
+  // 설비를 고르면 그 설비에 기록이 있는 날짜만 센다 (벽돌 라인처럼 날짜가 다른 데이터도 "최근 1주"로 보이게)
+  const dates = q.machine ? [...new Set(store.listDays({ machineId: q.machine }).map((d) => d.date))].sort() : store.dates();
   const hist = dates.filter((d) => d !== live.date);
   if (q.preset === 'live') return { from: live.date, to: live.date };
   if (q.from && q.to) return { from: q.from, to: q.to };
@@ -69,7 +70,8 @@ function checkImport(days, defects, attached) {
     return {
       machineId: d.machineId, machineName: m?.name ?? d.machineId, date: d.date,
       oee: r.oee, availability: r.availability, performance: r.performance, quality: r.quality,
-      stops: r.stops.length, unknown: unknown.length, count: r.count, defectCount: r.defectCount,
+      stops: r.stops.length, unknown: unknown.length, unknownSec: unknown.reduce((t, x) => t + x.dur, 0), count: r.count, defectCount: r.defectCount,
+      losses: r.losses,
       topLoss: top && top[1] > 0 ? { loss: top[0], label: LOSS[top[0]].label, sec: top[1] } : null,
       status: issues.some((i) => i.level === 'action') ? 'action' : issues.length ? 'review' : 'ok',
       issues,
@@ -91,6 +93,14 @@ function importText(content, { format: fmt, filename } = {}) {
     const old = store.getDay(d.machineId, d.date);
     if (old?.defects?.length && !d.defects.length) { d.defects = old.defects; d.defectCount = old.defectCount; }
     store.upsertDay(d);
+    // 작업일보처럼 사유를 글로 적어 둔 정지는 가져올 때 바로 분류한다 (작업자 카톡 답변과 같은 규칙)
+    if (d.kind === 'summary') {
+      for (const s of d.stops) {
+        if (!s.text) continue;
+        const c = classifyByRules(s.text);
+        store.addReason({ machineId: d.machineId, date: d.date, stopId: s.group, start: null, code: c.code, text: s.text, method: 'rule', confidence: c.confidence, by: 'import' }, { silent: true });
+      }
+    }
   }
   // 불량 기록 파일은 해당 설비·날짜의 불량을 통째로 바꾼다
   let attached = 0;

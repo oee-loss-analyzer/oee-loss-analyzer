@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MACHINES, SHIFT, plannedSeconds, hms } from '../src/config.js';
+import { SIM_MACHINES as MACHINES, SHIFT, plannedSeconds, hms } from '../src/config.js'; // 시뮬레이터로 만드는 설비만 (벽돌 라인 제외)
 import { simulateDay } from '../src/sim/factory.js';
 import { FORMATS } from '../src/sim/formats.js';
 import { parseFile, detectFormat } from '../src/ingest/parsers.js';

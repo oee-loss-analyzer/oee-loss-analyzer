@@ -66,12 +66,12 @@ export class Store {
     return [...new Set([...this.days.values()].map((d) => d.date))].sort();
   }
 
-  addReason(r) {
+  addReason(r, { silent = false } = {}) {
     // 같은 정지에 다시 답하면 덮어쓴다
     this.reasons = this.reasons.filter((x) => !(x.machineId === r.machineId && x.date === r.date && x.stopId === r.stopId));
     const rec = { id: this.nextId('R'), answeredAt: new Date().toISOString(), ...r };
     this.reasons.push(rec);
-    this.save();
+    if (!silent) this.save();
     return rec;
   }
 

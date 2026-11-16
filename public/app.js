@@ -112,7 +112,7 @@ function renderLive() {
 
   const wrap = $('#liveMachines');
   if (!wrap.children.length) {
-    wrap.innerHTML = CFG.machines.map((m) => `<div class="mcard" id="mc-${m.id}">
+    wrap.innerHTML = CFG.machines.filter((m) => m.sim !== false).map((m) => `<div class="mcard" id="mc-${m.id}">
       <div class="mhead"><div class="mname">${esc(m.name)}</div><span class="badge">-</span></div>
       <div class="mbody"><div class="amp">-</div><svg class="spark" viewBox="0 0 120 44" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.6" points=""/></svg></div>
       <div class="mstats"></div><div class="mtl"></div></div>`).join('');
@@ -227,10 +227,33 @@ $('#qMic').onclick = () => {
 };
 
 // ---------- 손실 분석 ----------
+// 기간 선택값 → 질의: "range:2025-09-22:2025-12-18" 은 가져온 파일의 기간 그대로
+function periodQuery(v) {
+  const m = /^range:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$/.exec(v);
+  return m ? `from=${m[1]}&to=${m[2]}` : `preset=${v}`;
+}
+// 파일을 가져오면 손실 분석·주간 리포트 기간에 "가져온 파일 기간"을 넣고 골라 둔다 (설비가 하나면 설비도)
+function usePeriodOfImport(days) {
+  if (!days.length) return;
+  const dates = days.map((d) => d.date).sort();
+  const from = dates[0];
+  const to = dates.at(-1);
+  const value = `range:${from}:${to}`;
+  const label = `가져온 파일 기간 (${from === to ? from : `${from} ~ ${to}`})`;
+  for (const id of ['#aPreset', '#rPreset']) {
+    const sel = $(id);
+    [...sel.options].filter((o) => o.value.startsWith('range:')).forEach((o) => o.remove());
+    sel.add(new Option(label, value), 0);
+    sel.value = value;
+  }
+  const machines = [...new Set(days.map((d) => d.machineId))];
+  $('#aMachine').value = machines.length === 1 ? machines[0] : '';
+}
+
 async function loadAnalysis() {
   const preset = $('#aPreset').value;
   const machine = $('#aMachine').value;
-  const a = await api(`/api/analysis?preset=${preset}&machine=${machine}`);
+  const a = await api(`/api/analysis?${periodQuery(preset)}&machine=${machine}`);
   $('#aRange').innerHTML = a.total.days ? esc(`${a.range.from} ~ ${a.range.to}`) : '<b class="empty-note">아직 데이터가 없어요 · <a href="#" data-goto="data">데이터 연결</a>에서 예시 파일을 가져오세요</b>';
   kpis($('#aKpis'), a.total);
   lossBars($('#aLosses'), a.total);
@@ -362,7 +385,7 @@ function renderKakao(f, trend, empty) {
 
 async function loadReport() {
   const preset = $('#rPreset').value;
-  const [r, a] = await Promise.all([api(`/api/report?preset=${preset}`), api(`/api/analysis?preset=${preset}`)]);
+  const [r, a] = await Promise.all([api(`/api/report?${periodQuery(preset)}`), api(`/api/analysis?${periodQuery(preset)}`)]);
   $('#rText').textContent = r.text;
   renderKakao(r.facts, a.trend, !a.total.days);
 }
@@ -459,6 +482,52 @@ const CK_STATUS = {
 const machineName = (id) => CFG.machines.find((m) => m.id === id)?.name ?? id;
 
 // 점검 결과 카드 한 장 (파일 하나)
+const oeeTone = (x) => (x >= 0.75 ? 'good' : x >= 0.6 ? 'mid' : 'bad');
+const ckMin = (sec) => `${Math.round(sec / 60).toLocaleString('ko-KR')}분`;
+// 설비·날짜 한 줄
+function ckRow(d) {
+  return `<div class="ck-row" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}">
+      <div class="ck-who"><b>${esc(d.machineName)}</b><span>${esc(d.date)}</span></div>
+      <div class="ck-nums">
+        <span class="ck-oee ${oeeTone(d.oee)}"><em>OEE</em><b>${pct(d.oee)}</b></span>
+        <span><em>정지</em><b>${d.stops}건</b></span>
+        <span><em>사유 없음</em><b data-unknown class="${d.unknown ? 'hot' : ''}">${d.unknown}건</b></span>
+        <span class="ck-top"><em>가장 큰 손실</em>${d.topLoss ? `${lossTag(d.topLoss.loss)} <b>${hrs(d.topLoss.sec)}</b>` : '<b>-</b>'}</span>
+      </div>
+      <button type="button" class="ck-go" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}" title="이 설비·날짜만 오른쪽에서 보기">분석 보기 →</button>
+    </div>`;
+}
+// 여러 날짜가 든 파일: 요약 한 줄 + 날짜별 OEE 막대 + OEE가 낮은 3일, 나머지는 접어 둔다
+function ckSummary(items) {
+  const dates = [...new Set(items.map((d) => d.date))].sort();
+  const machines = [...new Set(items.map((d) => d.machineId))];
+  const avg = items.reduce((a, d) => a + d.oee, 0) / items.length;
+  const stops = items.reduce((a, d) => a + d.stops, 0);
+  const unknown = items.reduce((a, d) => a + d.unknown, 0);
+  const losses = {};
+  for (const d of items) for (const [k, v] of Object.entries(d.losses ?? {})) losses[k] = (losses[k] ?? 0) + v;
+  const top = Object.entries(losses).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
+  const byDate = dates.map((date) => {
+    const ds = items.filter((d) => d.date === date);
+    return { date, oee: ds.reduce((a, d) => a + d.oee, 0) / ds.length, machine: ds.length === 1 ? ds[0].machineId : '' };
+  });
+  const worst = [...items].sort((a, b) => a.oee - b.oee).slice(0, 3);
+  return `<div class="ck-summary">
+      <div class="ck-who"><b>${machines.length === 1 ? esc(items[0].machineName) : `설비 ${machines.length}대`}</b><span>${esc(dates[0])} ~ ${esc(dates.at(-1))} · ${dates.length}일</span></div>
+      <div class="ck-nums">
+        <span class="ck-oee ${oeeTone(avg)}"><em>하루 평균 OEE</em><b>${pct(avg)}</b></span>
+        <span><em>정지</em><b>${stops.toLocaleString('ko-KR')}건</b></span>
+        <span><em>사유 없음</em><b data-sum-unknown class="${unknown ? 'hot' : ''}">${unknown}건</b></span>
+        <span class="ck-top"><em>가장 큰 손실</em>${top ? `${lossTag(top[0])} <b>${hrs(top[1])}</b>` : '<b>-</b>'}</span>
+      </div>
+    </div>
+    <div class="ck-spark" aria-label="날짜별 OEE">${byDate.map((b) => `<button type="button" class="ck-bar ${oeeTone(b.oee)}" ${b.machine ? `data-date="${esc(b.date)}" data-machine="${esc(b.machine)}"` : 'disabled'} title="${esc(b.date)} · OEE ${pct(b.oee)}${b.machine ? ' · 눌러서 분석 보기' : ''}"><i style="height:${Math.max(4, Math.min(100, b.oee * 100))}%"></i></button>`).join('')}</div>
+    <div class="ck-spark-x"><span>${esc(dates[0])}</span><span>막대: 날짜별 OEE · 낮을수록 빨강</span><span>${esc(dates.at(-1))}</span></div>
+    <div class="ck-sub">OEE가 낮은 날</div>
+    ${worst.map(ckRow).join('')}
+    <details class="ck-days"><summary>날짜별 전체 보기 (${items.length})</summary>${items.map(ckRow).join('')}</details>`;
+}
+
 function checkCard(it, r, err) {
   const st = CK_STATUS[err ? 'error' : r.check.status];
   const head = `<summary class="ck-head">
@@ -470,24 +539,29 @@ function checkCard(it, r, err) {
   }
   const c = r.check;
   let body = '';
+  let issues = [];
   if (c.kind === 'defects') {
     body = `<div class="ck-row"><div class="ck-who">작업자 불량 기록</div><div class="ck-nums"><span><em>불량 입력</em><b>${c.defects}건</b></span><span><em>연결된 기록</em><b>${c.attached}건</b></span></div></div>`;
+    issues = c.issues;
+  } else if (new Set(c.items.map((d) => d.date)).size > 1) {
+    body = ckSummary(c.items);
+    // 같은 내용은 한 번만: 사유 없는 정지는 합계로, 경고는 해당 일수와 함께
+    // 설비가 여럿이면 "설비·날짜" 단위라 '곳', 하나면 '일'
+    const unit = new Set(c.items.map((d) => d.machineId)).size > 1 ? '곳' : '일';
+    const un = c.items.filter((d) => d.unknown);
+    if (un.length) {
+      issues.push({ level: 'action', total: true, text: `사유가 빈 정지 ${un.reduce((a, d) => a + d.unknown, 0)}건 (합계 ${ckMin(un.reduce((a, d) => a + (d.unknownSec ?? 0), 0))}, ${un.length}${unit})`, todo: '정지 기록에서 사유 입력' });
+    }
+    const warn = new Map();
+    for (const d of c.items) for (const i of d.issues) if (!i.todo) warn.set(i.text, (warn.get(i.text) ?? 0) + 1);
+    for (const [text, n] of warn) issues.push({ level: 'review', text: n > 1 ? `${text} (${n === c.items.length ? '전체 해당' : `${n}${unit}`})` : text });
   } else {
-    body = c.items.map((d) => `<div class="ck-row" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}">
-      <div class="ck-who"><b>${esc(d.machineName)}</b><span>${esc(d.date)}</span></div>
-      <div class="ck-nums">
-        <span class="ck-oee ${d.oee >= 0.75 ? 'good' : d.oee >= 0.6 ? 'mid' : 'bad'}"><em>OEE</em><b>${pct(d.oee)}</b></span>
-        <span><em>정지</em><b>${d.stops}건</b></span>
-        <span><em>사유 없음</em><b data-unknown class="${d.unknown ? 'hot' : ''}">${d.unknown}건</b></span>
-        <span class="ck-top"><em>가장 큰 손실</em>${d.topLoss ? `${lossTag(d.topLoss.loss)} <b>${hrs(d.topLoss.sec)}</b>` : '<b>-</b>'}</span>
-      </div>
-      <button type="button" class="ck-go" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}" title="이 설비·날짜만 손실 분석에서 보기">분석 보기 →</button>
-    </div>`).join('');
+    body = c.items.map(ckRow).join('');
+    issues = c.items.flatMap((d) => d.issues.map((i) => ({ ...i, key: i.todo ? `${d.machineId}|${d.date}` : '', who: c.items.length > 1 ? d.machineName : '' })));
   }
-  const issues = c.kind === 'defects' ? c.issues : c.items.flatMap((d) => d.issues.map((i) => ({ ...i, key: i.todo ? `${d.machineId}|${d.date}` : '', who: c.items.length > 1 ? d.machineName : '' })));
   const todo = issues.find((i) => i.todo);
   return `<details class="ck ${st.cls}" data-status="${c.status}">${head}<div class="ck-body">${body}
-    ${issues.length ? `<ul class="ck-issues">${issues.map((i) => `<li class="${i.level}"${i.key ? ` data-unknown-for="${esc(i.key)}"` : ''}>${i.who ? `<b>${esc(i.who)}</b> · ` : ''}<span>${esc(i.text)}</span></li>`).join('')}</ul>` : '<p class="ck-fine">문제없이 읽었어요. 바로 분석에 쓸 수 있습니다.</p>'}
+    ${issues.length ? `<ul class="ck-issues">${issues.map((i) => `<li class="${i.level}"${i.key ? ` data-unknown-for="${esc(i.key)}"` : ''}${i.total ? ' data-unknown-total' : ''}>${i.who ? `<b>${esc(i.who)}</b> · ` : ''}<span>${esc(i.text)}</span></li>`).join('')}</ul>` : '<p class="ck-fine">문제없이 읽었어요. 바로 분석에 쓸 수 있습니다.</p>'}
     ${todo ? `<div class="ck-todo"><span>먼저 할 일</span>${esc(todo.todo)}</div>` : ''}
   </div></details>`;
 }
@@ -495,10 +569,12 @@ function checkCard(it, r, err) {
 // 파일 여러 개를 차례로 가져오고 점검 결과를 보여 준다 (예시·내 파일 공통)
 async function importFiles(items) {
   const cards = [];
+  const importedDays = [];
   $('#uploadResult').innerHTML = `<div class="ck-sum"><b>점검 중…</b> 파일 ${items.length}개</div>`;
   for (const it of items) {
     try {
       const r = it.run ? await it.run() : await api('/api/import', { filename: it.name, content: await it.read(), format: it.format ?? 'auto' });
+      importedDays.push(...r.imported);
       cards.push(checkCard(it, r));
     } catch (e) {
       cards.push(checkCard(it, null, e));
@@ -506,6 +582,7 @@ async function importFiles(items) {
   }
   $('#uploadResult').innerHTML = `<div class="ck-sum" id="ckSum"></div><div class="ck-list">${cards.join('')}</div>`;
   renderCkSummary();
+  usePeriodOfImport(importedDays);
   $('#uploadResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const cfg = await api('/api/config');
   CFG.dates = cfg.dates;
@@ -533,24 +610,42 @@ function renderCkSummary() {
 }
 
 // 사유를 입력한 뒤: 사유가 비어 있던 카드의 숫자를 다시 세고, 다 채웠으면 "조치 완료"로 바꾼다
+// 카드 하나당 한 번만 묻는다 (여러 날짜 파일도 기간 전체를 한 번에)
 async function refreshCheckCards() {
   const cards = [...document.querySelectorAll('.ck-list .ck[data-status="action"], .ck-list .ck[data-status="done"]')];
   for (const card of cards) {
     const rows = [...card.querySelectorAll('.ck-row[data-machine]')];
     if (!rows.length) continue;
-    let left = 0;
-    for (const row of rows) {
-      const { date, machine } = row.dataset;
-      const a = await api(`/api/analysis?from=${date}&to=${date}&machine=${machine}`);
-      const un = a.stops.filter((x) => x.loss === 'unknown');
-      left += un.length;
-      const b = row.querySelector('[data-unknown]');
-      b.textContent = `${un.length}건`;
-      b.classList.toggle('hot', un.length > 0);
-      const li = card.querySelector(`li[data-unknown-for="${machine}|${date}"]`);
-      if (li && un.length) li.querySelector('span').textContent = `사유가 빈 정지 ${un.length}건 (합계 ${Math.round(un.reduce((t, x) => t + x.dur, 0) / 60)}분)`;
-      else if (li) li.remove();
+    const dates = rows.map((r) => r.dataset.date).sort();
+    const machines = [...new Set(rows.map((r) => r.dataset.machine))];
+    const a = await api(`/api/analysis?from=${dates[0]}&to=${dates.at(-1)}${machines.length === 1 ? `&machine=${machines[0]}` : ''}`);
+    const keys = new Set(rows.map((r) => `${r.dataset.machine}|${r.dataset.date}`));
+    const un = new Map();
+    for (const x of a.stops) {
+      const k = `${x.machineId}|${x.date}`;
+      if (!keys.has(k) || x.loss !== 'unknown') continue;
+      const v = un.get(k) ?? { n: 0, sec: 0 };
+      v.n++; v.sec += x.dur;
+      un.set(k, v);
     }
+    for (const row of rows) {
+      const k = `${row.dataset.machine}|${row.dataset.date}`;
+      const n = un.get(k)?.n ?? 0;
+      const b = row.querySelector('[data-unknown]');
+      b.textContent = `${n}건`;
+      b.classList.toggle('hot', n > 0);
+    }
+    for (const li of card.querySelectorAll('li[data-unknown-for]')) {
+      const v = un.get(li.dataset.unknownFor);
+      if (v) li.querySelector('span').textContent = `사유가 빈 정지 ${v.n}건 (합계 ${ckMin(v.sec)})`;
+      else li.remove();
+    }
+    const left = [...un.values()].reduce((t, v) => t + v.n, 0);
+    const total = card.querySelector('li[data-unknown-total]');
+    if (total && left) total.querySelector('span').textContent = `사유가 빈 정지 ${left}건 (합계 ${ckMin([...un.values()].reduce((t, v) => t + v.sec, 0))}, ${un.size}${machines.length > 1 ? '곳' : '일'})`;
+    else if (total) total.remove();
+    const sum = card.querySelector('[data-sum-unknown]');
+    if (sum) { sum.textContent = `${left}건`; sum.classList.toggle('hot', left > 0); }
     const done = left === 0;
     card.dataset.status = done ? 'done' : 'action';
     card.classList.toggle('done', done);
@@ -609,7 +704,7 @@ function closeDrawer() {
 $('#dClose').onclick = closeDrawer;
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawerAt && $('#qModal').hidden) closeDrawer(); });
 $('#uploadResult').onclick = (e) => {
-  const b = e.target.closest('.ck-go');
+  const b = e.target.closest('.ck-go, .ck-bar[data-machine]');
   if (!b) return;
   openDrawer(b.dataset.date, b.dataset.machine).catch((er) => toast(er.message));
 };

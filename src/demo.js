@@ -1,7 +1,7 @@
 // 데모 데이터: 최근 2주(평일 10일)치 가상 공장 데이터를 "실제 데이터 형식"으로 만든 뒤 다시 읽어 들인다.
 // 1호기 → 전류 CSV, 2호기 → MTConnect XML, 3호기 → OPC UA JSON. (데이터는 어디서든 받아온다는 것을 보여 주기 위함)
 
-import { MACHINES, DETECTION } from './config.js';
+import { SIM_MACHINES as MACHINES, DETECTION } from './config.js';
 import { simulateDay } from './sim/factory.js';
 import { FORMATS } from './sim/formats.js';
 import { parseFile } from './ingest/parsers.js';

@@ -362,6 +362,20 @@ button.link { border: none; background: none; box-shadow: none; padding: 0; colo
 .ck-top .tag { margin-right: 4px; }
 .ck-top { flex-direction: column; }
 .ck-go { padding: 6px 12px; font-size: 12.5px; white-space: nowrap; }
+.ck-summary { display: grid; grid-template-columns: 170px 1fr; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-2); }
+.ck-spark { display: flex; align-items: flex-end; gap: 2px; height: 56px; margin: 10px 0 2px; padding: 0 2px; }
+.ck-bar { flex: 1; min-width: 3px; height: 100%; padding: 0; border: none; background: transparent; box-shadow: none; border-radius: 0; display: flex; align-items: flex-end; cursor: pointer; }
+.ck-bar:disabled { cursor: default; opacity: 1; }
+.ck-bar i { display: block; width: 100%; border-radius: 3px 3px 1px 1px; background: var(--t); opacity: .85; }
+.ck-bar.good { --t: var(--ok); } .ck-bar.mid { --t: var(--warn); } .ck-bar.bad { --t: var(--stop); }
+.ck-bar:hover:not(:disabled) i { opacity: 1; outline: 2px solid var(--accent-2); outline-offset: 1px; }
+.ck-spark-x { display: flex; justify-content: space-between; gap: 8px; font: 10.5px var(--mono); color: var(--muted); margin-bottom: 10px; }
+.ck-spark-x span:nth-child(2) { font-family: var(--font); }
+.ck-sub { font-size: 12px; font-weight: 700; color: var(--muted); margin: 4px 0 6px; }
+.ck-days { margin-top: 4px; }
+.ck-days > summary { cursor: pointer; font-size: 13px; font-weight: 650; color: var(--accent-ink); padding: 6px 0; }
+.ck-days[open] > summary { margin-bottom: 6px; }
+@media (max-width: 760px) { .ck-summary { grid-template-columns: 1fr; } }
 .ck-issues { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
 .ck-issues li { position: relative; padding-left: 16px; }
 .ck-issues li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
