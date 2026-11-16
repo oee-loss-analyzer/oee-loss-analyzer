@@ -151,6 +151,29 @@ export class LiveEngine extends EventEmitter {
     return rec;
   }
 
+  /** 남은 하루를 한 번에 돌리고, 아직 답이 없는 정지는 작업자 답변(시뮬레이션의 실제 원인 말투)으로 채운다 */
+  async finishDay() {
+    this.pause();
+    while (this.simSec < SHIFT.end) {
+      this.simSec += 1;
+      for (const st of this.machines) this.step(st, this.simSec);
+      if (this.simSec % 60 === 0) for (const st of this.machines) this.flush(st); // 1분마다 정리하며 질문을 만든다
+    }
+    for (const st of this.machines) this.flush(st);
+    let answered = 0;
+    for (const q of this.store.questions.filter((x) => x.date === this.date && x.status === 'pending')) {
+      const st = this.machines.find((x) => x.machine.id === q.machineId);
+      const truthStop = st?.truth.stops.find((s) => q.start >= s.start - 5 && q.start < s.end) ?? st?.truth.stops.find((s) => s.start <= q.start + 60 && s.end > q.start);
+      const text = truthStop?.utterance ?? this.rng.pick(UTTERANCES.OTHER);
+      await this.answer(q.id, { text, by: 'auto', noLlm: true });
+      answered++;
+    }
+    this.ended = true;
+    this.store.save();
+    this.emit('update', { type: 'status' }); // 'tick' 은 너무 잦으면 건너뛰므로 끝난 상태는 꼭 보내지게
+    return answered;
+  }
+
   addDefect(machineId, n = 1) {
     const st = this.machines.find((x) => x.machine.id === machineId);
     if (!st) throw new Error('설비를 찾을 수 없습니다');

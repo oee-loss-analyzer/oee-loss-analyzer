@@ -108,7 +108,6 @@ function renderLive() {
   $('#btnStart').textContent = LIVE.ended ? '근무 종료' : LIVE.simSec > CFG.shift.start ? '▶ 계속' : '▶ 시작';
   $('#btnPause').disabled = !LIVE.running;
   $('#speed').value = String(LIVE.speed);
-  $('#autoAnswer').checked = LIVE.autoAnswer;
 
   const wrap = $('#liveMachines');
   if (!wrap.children.length) {
@@ -168,7 +167,21 @@ $('#btnReset').onclick = async () => {
   refreshLiveAnalysis();
 };
 $('#speed').onchange = (e) => api('/api/live/settings', { speed: Number(e.target.value) });
-$('#autoAnswer').onchange = (e) => api('/api/live/settings', { autoAnswer: e.target.checked });
+// 오늘 결과 바로 보기: 남은 하루를 한 번에 돌리고 정지 사유를 자동으로 채운 뒤 손실 분석(오늘)으로 간다
+$('#btnFinish').onclick = async () => {
+  const b = $('#btnFinish');
+  b.disabled = true; b.textContent = '돌리는 중…';
+  try {
+    const r = await api('/api/live/finish', {});
+    closeQuestion();
+    qQueue = [];
+    toast(`오늘 하루를 끝까지 돌렸어요 · 정지 사유 ${r.answered}건을 자동으로 채웠어요`);
+    $('#aPreset').value = 'live';
+    $('#aMachine').value = '';
+    document.querySelector('#tabs [data-tab="analysis"]').click();
+    scrollTo({ top: 0 });
+  } catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = '⏭ 오늘 결과 바로 보기'; }
+};
 
 // ---------- 질문 창 ----------
 function openQuestion(q) {

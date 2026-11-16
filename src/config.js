@@ -38,7 +38,7 @@ export const MACHINES = [
   // 실제 공개 데이터용 설비: 벽돌 생산라인 (Zenodo, CC BY 4.0). 정지 기록만 있고 전류 신호가 없어 시뮬레이션(sim: false)은 하지 않는다.
   //  idealCycleSec 는 원본의 "계획시간 ÷ 이론 생산량"(약 0.46초/장)에서, marginPerPart 는 벽돌 1장 이익을 가정한 값이다.
   {
-    id: 'CLAY-LINE', name: '벽돌 라인 (공개 데이터)', type: 'line',
+    id: 'CLAY-LINE', name: '벽돌 라인', type: 'line',
     idealCycleSec: 0.46, marginPerPart: 30, source: 'mes', sim: false,
   },
 ];

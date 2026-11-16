@@ -24,8 +24,13 @@ const RULES = {
 // 동점일 때 우선순위 (고장 신호를 가장 중요하게 본다)
 const PRIORITY = ['BREAKDOWN', 'JAM', 'SETUP', 'ADJUST', 'MATERIAL', 'OPERATOR', 'CLEAN'];
 
+// 작업일보 사유 글의 [ ] 안은 위치·메모로 보고 분류에 쓰지 않는다 (예: "기계 고장 [건조기]" 의 '건조'가 자재 대기로 읽히지 않게)
+export function stripNotes(text) {
+  return String(text ?? '').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export function classifyByRules(text, hint = '') {
-  const t = ` ${String(text).toLowerCase()} `;
+  const t = ` ${stripNotes(text).toLowerCase()} `;
   const scores = {};
   const matched = {};
   for (const [code, words] of Object.entries(RULES)) {

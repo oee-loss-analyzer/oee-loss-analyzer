@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { convertPeriod, STOP_KO } from '../scripts/convert-heavy-clay.js';
+import { convertPeriod, STOP_KO, LOC_KO, locationLabel } from '../scripts/convert-heavy-clay.js';
 import { parseFile } from '../src/ingest/parsers.js';
 import { analyzeDay } from '../src/core/oee.js';
 import { classifyByRules } from '../src/reasons/classifier.js';
@@ -36,6 +36,8 @@ test('벽돌 라인 변환: 작업일보로 읽히고 원본의 시간가동률�
   assert.equal(format, 'mes-csv');
   assert.equal(days[0].machineId, 'CLAY-LINE');
   assert.equal(days[0].stops.length, 4);
+  // 사유 뒤에 정지 위치가 [ ] 로 붙는다 (위치가 '-'면 붙이지 않는다)
+  assert.deepEqual(days[0].stops.map((s) => s.text), ['기계 고장 [절단기]', '품종 교체 [압출 프레스]', '벽돌 수작업 처리(자재 흐름) [적재 스테이션]', '청소 [건조기]']);
   // 가져올 때처럼 사유 글을 규칙으로 분류해서 붙인다
   const reasons = days[0].stops.map((s) => ({ machineId: 'CLAY-LINE', date: days[0].date, stopId: s.group, code: classifyByRules(s.text).code }));
   const a = analyzeDay(days[0], reasons);
@@ -60,6 +62,16 @@ test('벽돌 라인 변환: 한글 사유가 원본 그룹과 같은 손실로 �
   }
   // 사유 글에 작업일보 구분자(, / ·)가 들어가면 안 된다
   for (const ko of Object.values(STOP_KO)) assert.ok(!/[,/·\d]/.test(ko), ko);
+});
+
+test('벽돌 라인 변환: 위치는 분류에 영향을 주지 않는다 ([ ] 안은 분류에서 뺀다)', () => {
+  // '건조기'의 '건조', '유압 승강기'의 '유압'처럼 분류 낱말이 든 위치가 있어도 사유대로 분류된다
+  for (const [en, ko] of Object.entries(STOP_KO)) {
+    const plain = classifyByRules(ko).code;
+    for (const loc of Object.keys(LOC_KO)) assert.equal(classifyByRules(`${ko} [${locationLabel(loc)}]`).code, plain, `${en} @ ${loc}`);
+  }
+  for (const loc of Object.keys(LOC_KO)) assert.ok(!/[,/·[\]]/.test(locationLabel(loc)), loc);
+  assert.equal(locationLabel('-'), '');
 });
 
 test('벽돌 라인은 실시간 현장·예시 파일 시뮬레이션에 들어가지 않는다', () => {

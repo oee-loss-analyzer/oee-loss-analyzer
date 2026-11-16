@@ -40,10 +40,6 @@
         <h1>기계가 멈춘 순간,<br><em>이유까지</em> 기록합니다</h1>
         <p>전류·가동 상태·생산 수량을 보면서, 2분 넘게 멈추면 작업자에게 카톡으로 사유를 묻고 손실을 바로 쌓습니다.</p>
       </div>
-      <div class="sim-note">
-        <b>가상 공장 시뮬레이션</b> · 발표 시간 안에 하루(08:00~17:00)를 보여 드리려고 가상 공장을 빨리 감기로 돌리는 화면입니다.
-        실제 공장에 설치하면 배속 없이 <b>실제 시간(×1)</b>으로, 기계에 붙은 센서 데이터를 받아 똑같은 방식으로 분석합니다.
-      </div>
       <div class="toolbar">
         <div class="clock"><span id="liveDate">-</span> <b id="liveClock">--:--</b></div>
         <button id="btnStart" class="primary">▶ 시작</button>
@@ -58,8 +54,7 @@
             <option value="300">×300</option>
           </select>
         </label>
-        <label class="check"><input type="checkbox" id="autoAnswer"> 작업자 자동 응답</label>
-        <span class="hint">설비가 2분 넘게 멈추면 작업자에게 사유를 묻습니다.</span>
+        <button id="btnFinish" class="btn-finish" title="오늘 남은 시간을 한 번에 돌리고, 정지 사유는 작업자 답변으로 자동으로 채웁니다">⏭ 오늘 결과 바로 보기</button>
       </div>
       <div class="kpis" id="liveKpis"></div>
       <div class="machines" id="liveMachines"></div>

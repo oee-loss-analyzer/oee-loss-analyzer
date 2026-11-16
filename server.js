@@ -166,6 +166,7 @@ const routes = {
   'POST /api/live/start': () => { live.start(); return liveState(); },
   'POST /api/live/pause': () => { live.pause(); return liveState(); },
   'POST /api/live/reset': () => { live.reset(); return liveState(); },
+  'POST /api/live/finish': async () => ({ ...liveState(), answered: await live.finishDay() }),
   'POST /api/live/settings': (b) => {
     if (b.speed) live.speed = Math.max(1, Math.min(600, Number(b.speed)));
     if (b.autoAnswer != null) live.autoAnswer = Boolean(b.autoAnswer);

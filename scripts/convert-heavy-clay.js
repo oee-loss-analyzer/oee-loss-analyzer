@@ -16,7 +16,8 @@
 //      (원본은 정지 목록 합계와 OEE 파일의 정지 시간이 어긋나는 날이 있어 OEE 파일을 기준으로 삼는다)
 //    · 생산·양품 수량은 원본의 OEE·양품률이 그대로 나오도록 맞춘다
 //  - "계획 정지 (OEE 제외)"(생산 계획 없음 등)는 원본처럼 계산에서 뺀다.
-//  - 정지 사유는 한글로 바꿔 "비가동사유"에 "사유 분" 형태로 적는다. 가져올 때 사유 분류 규칙이 손실 종류를 정한다.
+//  - 정지 사유는 한글로 바꿔 "비가동사유"에 "사유 [위치] 분" 형태로 적는다 (예: "기계 고장 [압출 프레스] 12").
+//    가져올 때 사유 분류 규칙이 손실 종류를 정하고, [ ] 안의 위치는 분류에 쓰지 않는다.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,6 +39,23 @@ export const STOP_KO = {
   CLEANING: '청소', GREASING: '주유', 'PLANNED MAINTENANCE': '계획 점검', OTHER: '기타',
   'LACK OF OPERATORS': '작업자 부족', 'METAL DETECTOR': '금속 검출기 정지', 'QUALITY CONTROL': '품질 검사', 'ΕΛΕΓΧΟΣ ΠΟΙΟΤΗΤΑΣ': '품질 검사',
 };
+// 정지 위치 (라인 안의 공정·장치). 원본에 그리스어로 적힌 것도 있다
+export const LOC_KO = {
+  'EXTRUDER PRESS': '압출 프레스', 'HACKING STATION': '적재 스테이션', 'DE-HACKING STATION': '하역 스테이션', DRYER: '건조기', CUTTER: '절단기',
+  'HYDRAULIC ELEVATOR (UNLOADING)': '유압 승강기(하역)', 'HYDRAULIC ELEVATOR (LOADING)': '유압 승강기(적재)', SILO: '사일로',
+  'SCREEN FEEDER': '스크린 피더', 'BOX FEEDERS': '박스 피더', 'CONVAYOR BELTS': '컨베이어 벨트', KILN: '소성로',
+  'KILN CAR TRANSPORTER (EXIT)': '소성차 이송기(출구)', 'EMPTY RACK TRANSPORTER': '빈 랙 이송기', 'ΜΕΤΑΦΟΡΕΑΣ ΑΔΕΙΩΝ ΤΕΛΑΡΩΝ': '빈 랙 이송기',
+  'MIDDLE RACK TRANSPORTER': '중간 랙 이송기', 'ΕΝΔΙΑΜΕΣΟΣ ΜΕΤΑΦΟΡΕΑΣ ΤΕΛΑΡΩΝ': '중간 랙 이송기', 'LINE 52': '52번 라인',
+  PACKAGING: '포장', 'PAN MILL': '팬 밀', 'ROBOT (EXTRUDER PRESS)': '로봇(압출 프레스)', 'ROBOT (HACKING STATION)': '로봇(적재 스테이션)',
+  'ROLLER MILL A': '롤러 밀 A', 'ROLLER MILL B': '롤러 밀 B', 'ROLLER MILL C': '롤러 밀 C',
+};
+export function locationLabel(loc) {
+  const l = String(loc ?? '').trim();
+  if (!l || l === '-') return '';
+  // 작업일보 구분자( , / · )는 쓰지 않는다
+  return (LOC_KO[l] ?? l).replace(/[,/·\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // 표에 없는 사유는 원본 그룹으로 정한다
 const GROUP_KO = { FAILURE: '기타 고장', MATERIALS: '자재 문제', 'SETUPS-CHANGEOVERS': '기타 교체', OPERATIONAL: '기타' };
 
@@ -99,7 +117,8 @@ export function convertPeriod(downtimeFile, oeeFile) {
     const g = byDate.get(date);
     const prod = col(r, /product/i);
     if (prod && !g.products.includes(prod)) g.products.push(prod);
-    g.stops.push({ label: stopLabel(col(r, /group/i), col(r, /^stop$/i)), min: Number(col(r, /duration/i)) || 0 });
+    const where = locationLabel(col(r, /location/i));
+    g.stops.push({ label: `${stopLabel(col(r, /group/i), col(r, /^stop$/i))}${where ? ` [${where}]` : ''}`, min: Number(col(r, /duration/i)) || 0 });
   }
   const header = '작업일자,설비코드,설비명,작업지시번호,품번,작업시작,작업종료,생산수량,양품수량,불량수량,비가동시간(분),비가동사유,작업자';
   const rows = [];
