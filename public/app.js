@@ -223,6 +223,8 @@ async function sendAnswer(payload) {
     const label = CFG.reasons.find((r) => r.code === rec.code)?.label;
     toast(payload.text ? `"${payload.text}" → ${label} (${methodLabel(rec)}${rec.llmError ? ', Claude 실패로 규칙 사용' : ''})` : `${label}(으)로 기록했습니다.`);
     if (currentTab === 'analysis') loadAnalysis(); else refreshLiveAnalysis();
+    if (drawerAt) openDrawer(drawerAt.date, drawerAt.machine); // 패널에서 사유를 넣었으면 패널도 새로 그린다
+    refreshCheckCards().catch(() => {}); // 점검 카드의 "사유 없음"·상태도 다시 센다
   } catch (e) { toast(e.message); } finally { $('#qSend').disabled = false; }
 }
 $('#qButtons').onclick = (e) => { const b = e.target.closest('button'); if (b) sendAnswer({ code: b.dataset.code }); };
@@ -250,10 +252,8 @@ $('#qMic').onclick = () => {
 async function loadAnalysis() {
   const preset = $('#aPreset').value;
   const machine = $('#aMachine').value;
-  // "date:2026-11-13" 은 파일을 가져온 날짜 하루만 본다 (점검 결과의 "손실 분석에서 보기")
-  const q = preset.startsWith('date:') ? `from=${preset.slice(5)}&to=${preset.slice(5)}` : `preset=${preset}`;
-  const a = await api(`/api/analysis?${q}&machine=${machine}`);
-  $('#aRange').textContent = `${a.range.from} ~ ${a.range.to}`;
+  const a = await api(`/api/analysis?preset=${preset}&machine=${machine}`);
+  $('#aRange').innerHTML = a.total.days ? esc(`${a.range.from} ~ ${a.range.to}`) : '<b class="empty-note">아직 데이터가 없어요 · <a href="#" data-goto="data">데이터 연결</a>에서 예시 파일을 가져오세요</b>';
   kpis($('#aKpis'), a.total);
   lossBars($('#aLosses'), a.total);
   $('#aInsights').innerHTML = a.insights.length ? `<ul class="insights">${a.insights.map((i) => `<li class="${i.level}">${esc(i.text)}</li>`).join('')}</ul>` : '<p class="muted">데이터가 더 쌓이면 패턴을 찾아 드립니다.</p>';
@@ -335,9 +335,62 @@ function sourceLabel(s) {
 }
 
 // ---------- 리포트 ----------
+// ---------- 카톡 리포트 미리보기 (말풍선마다 작은 그래프) ----------
+const lossColorByLabel = (label) => Object.values(CFG.loss).find((L) => L.label === label)?.color ?? 'var(--muted)';
+const p1 = (x) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
+function ktBubble(inner, time = '오전 8:00') {
+  return `<div class="kt-msg"><div class="kt-bubble">${inner}</div><span class="kt-time">${time}</span></div>`;
+}
+function renderKakao(f, trend, empty) {
+  if (empty) {
+    $('#ktDate').textContent = '';
+    $('#ktChat').innerHTML = `<div class="kt-day">매주 월요일 오전 8시 자동 발송</div>
+      <div class="kt-from"><span class="kt-avatar">🏭</span><b>OEE 리포트봇</b></div>
+      ${ktBubble('<div class="kt-title">아직 보낼 리포트가 없어요</div>데이터 연결 탭에서 예시 파일(하루치 · 일주일치 · 2주일치)을 가져오면 이곳에 그래프 리포트가 만들어져요.<button type="button" class="kt-btn" data-goto="data">데이터 연결로 가기</button>')}`;
+    return;
+  }
+  const md = (d) => d.slice(5).replace('-', '/');
+  $('#ktDate').textContent = `${md(f.period.from)} ~ ${md(f.period.to)}`;
+  const diff = f.previousOEE != null ? (f.factoryOEE - f.previousOEE) * 100 : null;
+  const delta = diff == null ? '' : `<span class="kt-delta ${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)}%p <small>지난 기간 대비</small></span>`;
+  const tone = f.factoryOEE >= 0.75 ? 'good' : f.factoryOEE >= 0.6 ? 'mid' : 'bad';
+  const lossTotal = Object.values(f.lossHours).reduce((a, b) => a + b, 0);
+  const top = Object.entries(f.lossHours).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const meter = (label, v) => `<div class="kt-meter"><span>${label}</span><i><b style="width:${Math.min(100, v * 100)}%"></b></i><em>${p1(v)}</em></div>`;
+
+  const b1 = `<div class="kt-title">📊 주간 설비 리포트</div>
+    <div class="kt-hero"><span class="kt-oee ${tone}">${p1(f.factoryOEE)}</span><span class="kt-hero-l">공장 전체 OEE${delta}</span></div>
+    <div class="kt-gauge" title="세계 수준 85%"><b class="${tone}" style="width:${Math.min(100, f.factoryOEE * 100)}%"></b><i style="left:85%"></i></div>
+    <div class="kt-gauge-x"><span>0</span><span>목표 85%</span></div>
+    ${meter('시간가동률', f.availability)}${meter('성능가동률', f.performance)}${meter('양품률', f.quality)}`;
+  const b2 = `<div class="kt-title">💸 잃어버린 시간 <b>${lossTotal.toFixed(1)}시간</b></div>
+    <div class="kt-sub">약 <b>${won(f.lossWon)}</b> · 사유 응답률 ${f.responseRate != null ? p1(f.responseRate) : '-'}</div>
+    ${top.map(([label, h], i) => `<div class="kt-loss"><span class="kt-rank">${i + 1}</span><span class="kt-lname">${esc(label)}</span><i><b style="width:${(h / top[0][1]) * 100}%;background:${lossColorByLabel(label)}"></b></i><em>${h.toFixed(1)}h</em></div>`).join('')}`;
+  const b3 = `<div class="kt-title">🏭 설비별 OEE</div>
+    ${f.machines.map((m) => {
+      const worst = Object.entries(m.lossHours).sort((a, b) => b[1] - a[1])[0];
+      const t = m.oee >= 0.75 ? 'good' : m.oee >= 0.6 ? 'mid' : 'bad';
+      return `<div class="kt-mach"><div class="kt-mach-h"><span>${esc(m.name)}</span><b class="${t}">${p1(m.oee)}</b></div>
+        <i class="kt-bar"><b class="${t}" style="width:${m.oee * 100}%"></b></i>
+        ${worst && worst[1] > 0 ? `<div class="kt-mach-s">가장 큰 손실 <span style="color:${lossColorByLabel(worst[0])}">●</span> ${esc(worst[0])} ${worst[1].toFixed(1)}시간</div>` : ''}</div>`;
+    }).join('')}`;
+  const b4 = trend.length > 1 ? `<div class="kt-title">📅 날짜별 OEE</div>
+    <div class="kt-cols">${trend.map((t) => `<div title="${t.date} · ${p1(t.oee)}"><em>${Math.round(t.oee * 100)}</em><i><b style="height:${t.oee * 100}%"></b></i><span>${t.weekday}</span></div>`).join('')}</div>` : '';
+  const b5 = f.insights.length ? `<div class="kt-title">💡 이번 주 할 일</div>
+    <ol class="kt-todo">${f.insights.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+    <button type="button" class="kt-btn" id="ktMore">손실 분석 자세히 보기</button>` : '';
+  $('#ktChat').innerHTML = `<div class="kt-day">매주 월요일 오전 8시 자동 발송</div>
+    <div class="kt-from"><span class="kt-avatar">🏭</span><b>OEE 리포트봇</b></div>
+    ${[b1, b2, b3, b4, b5].filter(Boolean).map((b, i, arr) => ktBubble(b, i === arr.length - 1 ? '오전 8:00' : '')).join('')}`;
+  const more = $('#ktMore');
+  if (more) more.onclick = () => document.querySelector('#tabs [data-tab="analysis"]').click();
+}
+
 async function loadReport() {
-  const r = await api(`/api/report?preset=${$('#rPreset').value}`);
+  const preset = $('#rPreset').value;
+  const [r, a] = await Promise.all([api(`/api/report?preset=${preset}`), api(`/api/analysis?preset=${preset}`)]);
   $('#rText').textContent = r.text;
+  renderKakao(r.facts, a.trend, !a.total.days);
   $('#btnAi').disabled = !CFG.llm.enabled;
   $('#rHint').textContent = CFG.llm.enabled ? `모델: ${CFG.llm.model}` : 'Claude로 다듬기는 서버에 ANTHROPIC_API_KEY 가 있을 때 켜집니다.';
 }
@@ -366,47 +419,54 @@ const REAL_DATA = [
   { name: 'CWRU 베어링 데이터 센터', url: 'https://engineering.case.edu/bearingdatacenter', note: '진동 기반 고장 진단(2단계 기능)의 표준 벤치마크' },
 ];
 
-// ---------- 예시 파일 (보기 · 저장 · 바로 가져오기) ----------
+// ---------- 예시 파일 (하루치 · 일주일치 · 2주일치 / 보기 · 저장 · 가져오기) ----------
 let exFiles = [];
+let exRange = '1d';
+let exInfo = null;
 function fmtSize(n) {
   if (n == null) return '';
   return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
 }
-// 예시 파일을 쉬운 이름으로 보여 준다 (설비는 설명 앞부분에서 가져온다)
 const EX_TITLE = {
   'ct-csv': '전류 센서 로그', mtconnect: 'CNC 가동 기록', opcua: '사출기 가동 기록',
   'modbus-csv': 'PLC 신호 로그', 'mes-csv': 'MES 작업일보', 'defects-json': '작업자 불량 입력',
 };
-function exParts(f) {
-  const parts = f.description.split('·').map((x) => x.trim());
-  const who = parts.length > 1 ? parts[0] : '설비 3대';
-  return { who, what: EX_TITLE[f.format] ?? parts.at(-1).replace(/\s*\(.*\)$/, '') };
-}
-const sampleUrl = (f) => `/samples/${encodeURIComponent(f.file)}`;
+const exTitle = (f) => EX_TITLE[f.format] ?? f.file;
+const sampleUrl = (f) => `/samples/set/${exRange}/${f.key}`;
 function renderExamples() {
   const FILE_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>';
   const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   const DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
-  $('#exList').innerHTML = exFiles.map((f, i) => {
-    const { who, what } = exParts(f);
-    return `<tr>
-      <td><span class="ex-name">${FILE_ICO}<b>${esc(what)}</b><span>${esc(who)}</span></span></td>
+  const md = (d) => d.slice(5).replace('-', '/');
+  $('#exDate').textContent = exInfo ? (exInfo.days === 1 ? exInfo.from : `${md(exInfo.from)} ~ ${md(exInfo.to)} · 평일 ${exInfo.days}일`) : '';
+  document.querySelectorAll('#exRange button').forEach((b) => b.classList.toggle('on', b.dataset.range === exRange));
+  $('#exList').innerHTML = exFiles.map((f, i) => `<tr class="${f.core ? '' : 'ex-extra'}">
+      <td><span class="ex-name">${FILE_ICO}<b>${esc(exTitle(f))}</b><span>${esc(f.who)}</span>${f.core ? '' : '<em class="ex-tag" title="같은 설비·날짜를 다른 형식으로 담은 파일이에요. 가져오면 앞의 기록을 덮어써서 \'전부 가져오기\'에는 넣지 않아요.">다른 형식</em>'}</span></td>
       <td class="muted">${esc(sourceLabel(f.format))}</td>
       <td class="num muted">${fmtSize(f.size)}</td>
-      <td class="ex-act"><button type="button" class="icon-btn" data-view="${i}" title="내용 보기" aria-label="${esc(what)} 내용 보기">${EYE}</button><a class="icon-btn" href="${sampleUrl(f)}" download="${esc(f.file)}" title="저장" aria-label="${esc(what)} 저장">${DOWN}</a></td>
-    </tr>`;
-  }).join('');
+      <td class="ex-act"><button type="button" class="icon-btn" data-view="${i}" title="내용 보기" aria-label="${esc(exTitle(f))} 내용 보기">${EYE}</button><a class="icon-btn" href="${sampleUrl(f)}" download="${esc(f.file)}" title="저장" aria-label="${esc(exTitle(f))} 저장">${DOWN}</a></td>
+    </tr>`).join('');
 }
+async function loadExamples() {
+  exInfo = await api(`/api/samples?range=${exRange}`);
+  exFiles = exInfo.files;
+  renderExamples();
+}
+$('#exRange').onclick = (e) => {
+  const b = e.target.closest('[data-range]');
+  if (!b || b.dataset.range === exRange) return;
+  exRange = b.dataset.range;
+  $('#exList').innerHTML = '<tr><td colspan="4" class="muted">만드는 중…</td></tr>';
+  loadExamples().catch((er) => toast(er.message));
+};
 $('#exList').onclick = async (e) => {
   const b = e.target.closest('[data-view]');
   if (!b) return;
   const f = exFiles[+b.dataset.view];
-  const text = await fetch(sampleUrl(f)).then((r) => r.text());
-  const lines = text.split('\n');
-  const SHOW = 60;
-  $('#vTitle').textContent = exParts(f).what;
-  $('#vMeta').textContent = `${f.file} · ${fmtSize(f.size)} · ${lines.length.toLocaleString('ko-KR')}줄${lines.length > SHOW ? ` (앞 ${SHOW}줄만 보여 줍니다)` : ''}`;
-  $('#vBody').textContent = lines.slice(0, SHOW).join('\n');
+  const p = await api(`${sampleUrl(f)}?preview=1`);
+  $('#vTitle').textContent = exTitle(f);
+  $('#vMeta').textContent = `${f.file} · ${fmtSize(f.size)} · ${p.lines.toLocaleString('ko-KR')}줄${p.lines > 60 ? ' (앞 60줄만 보여 줍니다)' : ''}`;
+  $('#vBody').textContent = p.head;
   $('#vSave').href = sampleUrl(f);
   $('#vSave').setAttribute('download', f.file);
   $('#viewer').hidden = false;
@@ -415,12 +475,14 @@ const closeViewer = () => { $('#viewer').hidden = true; };
 $('#vClose').onclick = closeViewer;
 $('#viewer').onclick = (e) => { if (e.target.id === 'viewer') closeViewer(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#viewer').hidden) closeViewer(); });
+// 전부 가져오기: 설비·날짜가 겹치지 않는 파일만 (전류 · CNC · 사출기 · 불량), 서버에서 바로 가져온다
 $('#exImportAll').onclick = async () => {
   const btn = $('#exImportAll');
   btn.disabled = true; btn.textContent = '가져오는 중…';
+  const range = exRange;
   try {
-    await importFiles(exFiles.map((f) => ({ name: f.file, label: exParts(f).what, format: f.format, read: () => fetch(sampleUrl(f)).then((r) => r.text()) })));
-  } finally { btn.disabled = false; btn.textContent = '전부 바로 가져오기'; }
+    await importFiles(exFiles.filter((f) => f.core).map((f) => ({ name: f.file, label: exTitle(f), run: () => api('/api/samples/import', { range, key: f.key }) })));
+  } finally { btn.disabled = false; btn.textContent = '전부 가져오기'; }
 };
 
 // 파일 여러 개를 차례로 가져오고 결과를 보여 준다 (샘플·내 파일 공통)
@@ -428,6 +490,7 @@ const CK_STATUS = {
   action: { label: '조치 필요', cls: 'action' },
   review: { label: '검토 필요', cls: 'review' },
   ok: { label: '정상', cls: 'ok' },
+  done: { label: '조치 완료', cls: 'done' },
   error: { label: '읽기 실패', cls: 'action' },
 };
 const machineName = (id) => CFG.machines.find((m) => m.id === id)?.name ?? id;
@@ -435,75 +498,151 @@ const machineName = (id) => CFG.machines.find((m) => m.id === id)?.name ?? id;
 // 점검 결과 카드 한 장 (파일 하나)
 function checkCard(it, r, err) {
   const st = CK_STATUS[err ? 'error' : r.check.status];
-  const head = `<div class="ck-head">
-    <span class="ck-file"><b>${esc(it.label ?? it.name)}</b><span>${[it.label && it.label !== it.name ? esc(it.name) : '', r ? esc(sourceLabel(r.format)) : ''].filter(Boolean).join(' · ')}</span></span>
-    <span class="ck-badge ${st.cls}">${st.label}</span></div>`;
+  const head = `<summary class="ck-head">
+    <span class="ck-file"><b>${esc(it.label ?? it.name)}</b></span>
+    <span class="ck-badge ${st.cls}">${st.label}</span></summary>`;
   if (err) {
-    return `<div class="ck ${st.cls}">${head}<ul class="ck-issues"><li class="action">${esc(err.message)}</li></ul>
-      <div class="ck-todo"><span>먼저 할 일</span>지원하는 형식(CSV · XML · JSON)인지, 파일이 잘리지 않았는지 확인</div></div>`;
+    return `<details class="ck ${st.cls}" data-status="error">${head}<div class="ck-body"><ul class="ck-issues"><li class="action">${esc(err.message)}</li></ul>
+      <div class="ck-todo"><span>먼저 할 일</span>지원하는 형식(CSV · XML · JSON)인지, 파일이 잘리지 않았는지 확인</div></div></details>`;
   }
   const c = r.check;
   let body = '';
   if (c.kind === 'defects') {
     body = `<div class="ck-row"><div class="ck-who">작업자 불량 기록</div><div class="ck-nums"><span><em>불량 입력</em><b>${c.defects}건</b></span><span><em>연결된 기록</em><b>${c.attached}건</b></span></div></div>`;
   } else {
-    body = c.items.map((d) => `<div class="ck-row">
+    body = c.items.map((d) => `<div class="ck-row" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}">
       <div class="ck-who"><b>${esc(d.machineName)}</b><span>${esc(d.date)}</span></div>
       <div class="ck-nums">
         <span class="ck-oee ${d.oee >= 0.75 ? 'good' : d.oee >= 0.6 ? 'mid' : 'bad'}"><em>OEE</em><b>${pct(d.oee)}</b></span>
         <span><em>정지</em><b>${d.stops}건</b></span>
-        <span><em>사유 없음</em><b class="${d.unknown ? 'hot' : ''}">${d.unknown}건</b></span>
+        <span><em>사유 없음</em><b data-unknown class="${d.unknown ? 'hot' : ''}">${d.unknown}건</b></span>
         <span class="ck-top"><em>가장 큰 손실</em>${d.topLoss ? `${lossTag(d.topLoss.loss)} <b>${hrs(d.topLoss.sec)}</b>` : '<b>-</b>'}</span>
       </div>
       <button type="button" class="ck-go" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}" title="이 설비·날짜만 손실 분석에서 보기">분석 보기 →</button>
     </div>`).join('');
   }
-  const issues = c.kind === 'defects' ? c.issues : c.items.flatMap((d) => d.issues.map((i) => ({ ...i, who: c.items.length > 1 ? d.machineName : '' })));
+  const issues = c.kind === 'defects' ? c.issues : c.items.flatMap((d) => d.issues.map((i) => ({ ...i, key: i.todo ? `${d.machineId}|${d.date}` : '', who: c.items.length > 1 ? d.machineName : '' })));
   const todo = issues.find((i) => i.todo);
-  return `<div class="ck ${st.cls}">${head}${body}
-    ${issues.length ? `<ul class="ck-issues">${issues.map((i) => `<li class="${i.level}">${i.who ? `<b>${esc(i.who)}</b> · ` : ''}${esc(i.text)}</li>`).join('')}</ul>` : '<p class="ck-fine">문제없이 읽었어요. 바로 분석에 쓸 수 있습니다.</p>'}
+  return `<details class="ck ${st.cls}" data-status="${c.status}">${head}<div class="ck-body">${body}
+    ${issues.length ? `<ul class="ck-issues">${issues.map((i) => `<li class="${i.level}"${i.key ? ` data-unknown-for="${esc(i.key)}"` : ''}>${i.who ? `<b>${esc(i.who)}</b> · ` : ''}<span>${esc(i.text)}</span></li>`).join('')}</ul>` : '<p class="ck-fine">문제없이 읽었어요. 바로 분석에 쓸 수 있습니다.</p>'}
     ${todo ? `<div class="ck-todo"><span>먼저 할 일</span>${esc(todo.todo)}</div>` : ''}
-  </div>`;
+  </div></details>`;
 }
 
 // 파일 여러 개를 차례로 가져오고 점검 결과를 보여 준다 (예시·내 파일 공통)
 async function importFiles(items) {
   const cards = [];
-  const count = { action: 0, review: 0, ok: 0 };
   $('#uploadResult').innerHTML = `<div class="ck-sum"><b>점검 중…</b> 파일 ${items.length}개</div>`;
   for (const it of items) {
     try {
-      const r = await api('/api/import', { filename: it.name, content: await it.read(), format: it.format ?? 'auto' });
-      count[r.check.status]++;
+      const r = it.run ? await it.run() : await api('/api/import', { filename: it.name, content: await it.read(), format: it.format ?? 'auto' });
       cards.push(checkCard(it, r));
     } catch (e) {
-      count.action++;
       cards.push(checkCard(it, null, e));
     }
   }
-  $('#uploadResult').innerHTML = `<div class="ck-sum"><b>점검 결과</b><span>파일 ${items.length}개</span>
-      ${count.action ? `<span class="ck-badge action">조치 필요 ${count.action}</span>` : ''}
-      ${count.review ? `<span class="ck-badge review">검토 필요 ${count.review}</span>` : ''}
-      ${count.ok ? `<span class="ck-badge ok">정상 ${count.ok}</span>` : ''}</div>
-    <div class="ck-list">${cards.join('')}</div>`;
+  $('#uploadResult').innerHTML = `<div class="ck-sum" id="ckSum"></div><div class="ck-list">${cards.join('')}</div>`;
+  renderCkSummary();
   $('#uploadResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const cfg = await api('/api/config');
   CFG.dates = cfg.dates;
   loadData();
 }
 
-// 점검 결과에서 "분석 보기" → 그 설비·날짜만 손실 분석에서 연다
+// "데이터 연결로 가기" 같은 안내 링크
+document.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-goto]');
+  if (!g) return;
+  e.preventDefault();
+  document.querySelector(`#tabs [data-tab="${g.dataset.goto}"]`).click();
+  scrollTo({ top: 0 });
+});
+$('#homeLogo').onclick = () => document.querySelector('#tabs [data-tab="live"]').click();
+
+// 점검 결과 맨 위 요약 (카드 상태를 세어서 그린다 — 사유를 채우면 바로 바뀐다)
+function renderCkSummary() {
+  const el = $('#ckSum');
+  if (!el) return;
+  const cards = [...document.querySelectorAll('.ck-list .ck')];
+  const n = (st) => cards.filter((c) => st.includes(c.dataset.status)).length;
+  const parts = [['action', ['action', 'error'], '조치 필요'], ['done', ['done'], '조치 완료'], ['review', ['review'], '검토 필요'], ['ok', ['ok'], '정상']];
+  el.innerHTML = `<b>점검 결과</b><span>파일 ${cards.length}개</span>${parts.map(([cls, st, label]) => (n(st) ? `<span class="ck-badge ${cls}">${label} ${n(st)}</span>` : '')).join('')}`;
+}
+
+// 사유를 입력한 뒤: 사유가 비어 있던 카드의 숫자를 다시 세고, 다 채웠으면 "조치 완료"로 바꾼다
+async function refreshCheckCards() {
+  const cards = [...document.querySelectorAll('.ck-list .ck[data-status="action"], .ck-list .ck[data-status="done"]')];
+  for (const card of cards) {
+    const rows = [...card.querySelectorAll('.ck-row[data-machine]')];
+    if (!rows.length) continue;
+    let left = 0;
+    for (const row of rows) {
+      const { date, machine } = row.dataset;
+      const a = await api(`/api/analysis?from=${date}&to=${date}&machine=${machine}`);
+      const un = a.stops.filter((x) => x.loss === 'unknown');
+      left += un.length;
+      const b = row.querySelector('[data-unknown]');
+      b.textContent = `${un.length}건`;
+      b.classList.toggle('hot', un.length > 0);
+      const li = card.querySelector(`li[data-unknown-for="${machine}|${date}"]`);
+      if (li && un.length) li.querySelector('span').textContent = `사유가 빈 정지 ${un.length}건 (합계 ${Math.round(un.reduce((t, x) => t + x.dur, 0) / 60)}분)`;
+      else if (li) li.remove();
+    }
+    const done = left === 0;
+    card.dataset.status = done ? 'done' : 'action';
+    card.classList.toggle('done', done);
+    card.classList.toggle('action', !done);
+    const badge = card.querySelector('.ck-head .ck-badge');
+    badge.className = `ck-badge ${done ? 'done' : 'action'}`;
+    badge.textContent = done ? '조치 완료' : '조치 필요';
+    const todo = card.querySelector('.ck-todo');
+    if (todo) todo.hidden = done;
+    let fine = card.querySelector('.ck-fine.done');
+    if (done && !fine) {
+      fine = document.createElement('p');
+      fine.className = 'ck-fine done';
+      fine.textContent = '사유를 모두 입력했어요. 이제 손실 원인이 정확히 집계됩니다.';
+      card.querySelector('.ck-body').append(fine);
+    } else if (!done && fine) fine.remove();
+  }
+  renderCkSummary();
+}
+
+// 점검 결과에서 "분석 보기" → 오른쪽 패널에 그 설비·날짜 분석을 띄운다 (탭은 그대로)
+let drawerAt = null;
+async function openDrawer(date, machine) {
+  drawerAt = { date, machine };
+  const a = await api(`/api/analysis?from=${date}&to=${date}&machine=${machine}`);
+  const t = a.total;
+  $('#dTitle').textContent = machineName(machine);
+  $('#dSub').textContent = `${date} · 계획 ${hrs(t.plannedSec)} 중 ${hrs(t.totalLossSec)} 손실`;
+  const tone = t.oee >= 0.75 ? 'good' : t.oee >= 0.6 ? 'mid' : 'bad';
+  $('#dKpis').innerHTML = `<div class="d-oee ${tone}"><em>OEE</em><b>${pct(t.oee)}</b></div>
+    <div><em>시간가동률</em><b>${pct(t.availability)}</b></div>
+    <div><em>성능가동률</em><b>${pct(t.performance)}</b></div>
+    <div><em>양품률</em><b>${pct(t.quality)}</b></div>
+    <div><em>손실 금액</em><b>${won(t.totalLossWon)}</b></div>`;
+  const tl = a.timelines[0];
+  $('#dTl').innerHTML = tl?.timeline?.length ? timelineBar(tl.timeline, tl.untilSec) : '<p class="muted">시각 정보가 없는 데이터예요 (작업일보 합계).</p>';
+  lossBars($('#dLosses'), t);
+  const stops = [...a.stops].sort((x, y) => (x.start ?? Infinity) - (y.start ?? Infinity));
+  $('#dStops').innerHTML = stopsTable(stops, { withDate: false });
+  document.body.classList.add('drawer-open');
+  $('#drawer').removeAttribute('inert');
+  $('#drawer').setAttribute('aria-hidden', 'false');
+}
+function closeDrawer() {
+  drawerAt = null;
+  document.body.classList.remove('drawer-open');
+  $('#drawer').setAttribute('inert', '');
+  $('#drawer').setAttribute('aria-hidden', 'true');
+}
+$('#dClose').onclick = closeDrawer;
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawerAt && $('#qModal').hidden) closeDrawer(); });
 $('#uploadResult').onclick = (e) => {
   const b = e.target.closest('.ck-go');
   if (!b) return;
-  const { date, machine } = b.dataset;
-  const sel = $('#aPreset');
-  let opt = [...sel.options].find((o) => o.value === `date:${date}`);
-  if (!opt) { opt = new Option(`${date} (가져온 날)`, `date:${date}`); sel.add(opt, 0); }
-  sel.value = opt.value;
-  $('#aMachine').value = machine;
-  document.querySelector('#tabs [data-tab="analysis"]').click();
-  scrollTo({ top: 0 });
+  openDrawer(b.dataset.date, b.dataset.machine).catch((er) => toast(er.message));
 };
 
 // 내 파일: 끌어다 놓기 또는 눌러서 고르기
@@ -515,18 +654,19 @@ const dz = $('#dropzone');
 dz.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) importFiles(fromFiles(e.dataTransfer.files)); });
 
 async function loadData() {
-  const s = await api('/api/samples');
-  $('#exDate').textContent = `${s.date} 하루치`;
-  exFiles = s.files.filter((f) => f.format !== 'truth');
-  renderExamples();
+  await loadExamples();
   const imp = await api('/api/imports');
+  $('#impCount').textContent = imp.length ? `${imp.length}건` : '';
   $('#imports').innerHTML = imp.length ? `<ul class="imp-list">${imp.slice(0, 8).map((i) => `<li><span class="ftype">${esc(sourceLabel(i.format))}</span><b>${esc(i.file)}</b><span class="muted">${[i.days ? `${i.days}개 설비·일` : '', i.defects ? `불량 ${i.defects}` : ''].filter(Boolean).join(' · ')}</span><time>${new Date(i.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></li>`).join('')}</ul>${imp.length > 8 ? `<p class="hint">최근 8건만 보여 줍니다 (전체 ${imp.length}건).</p>` : ''}` : '<p class="muted">아직 가져온 파일이 없습니다.</p>';
   $('#realData').innerHTML = REAL_DATA.map((d) => `<li><a href="${d.url}" target="_blank" rel="noopener" title="${esc(d.note)}">${esc(d.name)}</a></li>`).join('');
 }
-$('#btnDemo').onclick = async () => {
-  if (!confirm('저장된 데이터를 모두 지우고 최근 2주 데모 데이터를 다시 만들까요?')) return;
-  const r = await api('/api/demo/reload', {});
-  toast(`데모 데이터 ${r.days}건을 만들었습니다 (${r.dates[0]} ~ ${r.dates.at(-1)}).`);
+$('#btnClear').onclick = async () => {
+  if (!confirm('가져온 파일, 입력한 사유, 오늘 실시간 기록까지 모두 지울까요? 되돌릴 수 없어요.')) return;
+  await api('/api/data/clear', {});
+  $('#uploadResult').innerHTML = '';
+  toast('모든 데이터를 지웠어요. 예시 파일을 다시 가져와 보세요.');
+  const cfg = await api('/api/config');
+  CFG.dates = cfg.dates;
   loadData();
 };
 
@@ -545,8 +685,6 @@ $('#tabs').onclick = (e) => {
 
 async function init() {
   CFG = await api('/api/config');
-  $('#llmBadge').textContent = CFG.llm.enabled ? `사유 분류: Claude (${CFG.llm.model})` : '사유 분류: 규칙 기반 (API 키 없음)';
-  $('#llmBadge').classList.toggle('on', CFG.llm.enabled);
   $('#aMachine').innerHTML += CFG.machines.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
   LIVE = await api('/api/live');
   renderLive();

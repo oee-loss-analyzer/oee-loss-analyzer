@@ -9,13 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { MACHINES, REASONS, LOSS, SHIFT, DETECTION, FACTORY } from './src/config.js';
 import { Store } from './src/store.js';
 import { LiveEngine } from './src/live.js';
-import { loadDemo } from './src/demo.js';
+import { listSamples, buildSampleText, sampleFileName, SAMPLE_FILES } from './src/sampleSets.js';
 import { parseFile } from './src/ingest/parsers.js';
 import { aggregate } from './src/core/oee.js';
 import { hourlyLoss, reasonStats, machineStats, dailyTrend, findInsights, buildReport } from './src/core/insights.js';
 import { classifyReason, llmEnabled, writeReportWithClaude, LLM_MODEL } from './src/reasons/classifier.js';
 import { generateSamples } from './scripts/generate-samples.js';
-import { todayLocal } from './src/core/time.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4300);
@@ -24,7 +23,7 @@ const SAMPLES = path.join(ROOT, 'sample-data');
 
 const store = new Store();
 const live = new LiveEngine(store);
-if (!store.days.size || !store.listDays().some((d) => !d.live)) loadDemo(store);
+// 데모 데이터는 자동으로 넣지 않는다. 손실 분석은 데이터 연결에서 가져온 파일과 실시간 현장 기록만 쓴다.
 if (!fs.existsSync(path.join(SAMPLES, 'index.json'))) generateSamples(SAMPLES);
 
 // ---------- 실시간 알림 (Server-Sent Events) ----------
@@ -83,6 +82,36 @@ function checkImport(days, defects, attached) {
   }
   const status = items.some((i) => i.status === 'action') ? 'action' : items.some((i) => i.status === 'review') ? 'review' : 'ok';
   return { kind: 'days', status, items };
+}
+
+// 파일 내용을 읽어 저장하고 점검 결과를 붙여 돌려준다 (내 파일 · 예시 파일 공통)
+function importText(content, { format: fmt, filename } = {}) {
+  const { format, days, defects } = parseFile(content, { format: fmt, filename });
+  for (const d of days) {
+    const old = store.getDay(d.machineId, d.date);
+    if (old?.defects?.length && !d.defects.length) { d.defects = old.defects; d.defectCount = old.defectCount; }
+    store.upsertDay(d);
+  }
+  // 불량 기록 파일은 해당 설비·날짜의 불량을 통째로 바꾼다
+  let attached = 0;
+  const replaced = new Set();
+  for (const df of defects) {
+    const day = store.getDay(df.machineId, df.date);
+    if (!day) continue;
+    const key = `${df.machineId}|${df.date}`;
+    if (!replaced.has(key)) { day.defects = []; replaced.add(key); }
+    day.defects.push({ ts: df.ts, n: df.n });
+    day.defectCount = day.defects.reduce((a, d) => a + d.n, 0);
+    attached++;
+  }
+  const rec = { at: new Date().toISOString(), file: filename ?? '(붙여넣기)', format, days: days.length, defects: attached };
+  store.imports.push(rec);
+  store.save();
+  return {
+    ...rec,
+    imported: days.map((d) => ({ machineId: d.machineId, date: d.date, stops: d.stops.length, count: d.count })),
+    check: checkImport(days, defects, attached),
+  };
 }
 
 function analysis(q) {
@@ -149,48 +178,19 @@ const routes = {
     const r = report(b);
     return { text: await writeReportWithClaude(r.facts), template: r.text };
   },
-  'POST /api/import': (b) => {
-    const { format, days, defects } = parseFile(b.content ?? '', { format: b.format, filename: b.filename });
-    for (const d of days) {
-      const old = store.getDay(d.machineId, d.date);
-      if (old?.defects?.length && !d.defects.length) { d.defects = old.defects; d.defectCount = old.defectCount; }
-      store.upsertDay(d);
-    }
-    // 불량 기록 파일은 해당 설비·날짜의 불량을 통째로 바꾼다
-    let attached = 0;
-    const replaced = new Set();
-    for (const df of defects) {
-      const day = store.getDay(df.machineId, df.date);
-      if (!day) continue;
-      const key = `${df.machineId}|${df.date}`;
-      if (!replaced.has(key)) { day.defects = []; replaced.add(key); }
-      day.defects.push({ ts: df.ts, n: df.n });
-      day.defectCount = day.defects.reduce((a, d) => a + d.n, 0);
-      attached++;
-    }
-    const rec = { at: new Date().toISOString(), file: b.filename ?? '(붙여넣기)', format, days: days.length, defects: attached };
-    store.imports.push(rec);
-    store.save();
-    return {
-      ...rec,
-      imported: days.map((d) => ({ machineId: d.machineId, date: d.date, stops: d.stops.length, count: d.count })),
-      check: checkImport(days, defects, attached),
-    };
+  'POST /api/import': (b) => importText(b.content ?? '', { format: b.format, filename: b.filename }),
+  // 예시 파일 묶음을 서버에서 바로 가져온다 (2주치 전류 로그는 19MB라 브라우저로 주고받지 않는다)
+  'POST /api/samples/import': (b) => {
+    const f = SAMPLE_FILES.find((x) => x.key === b.key);
+    if (!f) throw httpError(404, '알 수 없는 예시 파일입니다.');
+    return importText(buildSampleText(b.range, b.key), { format: f.format, filename: sampleFileName(b.range, b.key) });
   },
   'GET /api/imports': () => store.imports.slice(-30).reverse(),
-  'GET /api/samples': () => {
-    const idx = JSON.parse(fs.readFileSync(path.join(SAMPLES, 'index.json'), 'utf8'));
-    // 화면의 파일 고르기 창에 크기를 보여 주려고 붙인다
-    for (const f of idx.files) {
-      try { f.size = fs.statSync(path.join(SAMPLES, f.file)).size; } catch { f.size = null; }
-    }
-    return idx;
-  },
-  'POST /api/demo/reload': () => {
+  'GET /api/samples': (_, q) => listSamples(q.range ?? '1d'),
+  'POST /api/data/clear': () => {
     store.clear();
-    const r = loadDemo(store, { today: todayLocal() });
     live.reset();
-    return r;
+    return { ok: true };
   },
 };
 
@@ -236,6 +236,22 @@ const server = http.createServer(async (req, res) => {
       const out = await handler(body, Object.fromEntries(url.searchParams));
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(out));
+      return;
+    }
+    const set = /^\/samples\/set\/(1d|1w|2w)\/([a-z]+)$/.exec(url.pathname);
+    if (set) {
+      const [, range, key] = set;
+      const text = buildSampleText(range, key);
+      if (url.searchParams.has('preview')) {
+        // 미리보기: 앞부분 60줄과 전체 줄 수만 보낸다
+        const lines = text.split('\n');
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ head: lines.slice(0, 60).join('\n'), lines: lines.length }));
+        return;
+      }
+      const name = sampleFileName(range, key);
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"` });
+      res.end(text);
       return;
     }
     if (url.pathname.startsWith('/samples/') && serveFile(res, SAMPLES, decodeURIComponent(url.pathname.slice(9)))) return;

@@ -12,7 +12,7 @@ Node.js 20 이상만 있으면 됩니다. 다른 패키지는 설치하지 않�
 npm start
 ```
 
-브라우저에서 http://localhost:4300 을 엽니다. 처음 실행하면 최근 2주(평일 10일) 치 데모 데이터와 샘플 파일(`sample-data/`)이 자동으로 만들어집니다.
+브라우저에서 http://localhost:4300 을 엽니다. 처음에는 손실 분석이 비어 있습니다. **데이터 연결** 탭에서 예시 파일(하루치 · 일주일치 · 2주일치, 2026-11-13까지)을 가져오면 손실 분석과 주간 리포트에서 볼 수 있습니다. 예시 묶음은 `src/sampleSets.js`가 요청할 때 만들고, 하루치는 `sample-data/`의 파일과 같습니다.
 
 ```bash
 npm test         # 엔진 테스트 (형식 변환 왕복, OEE 공식, 기획서 예시, 실시간 질문)
@@ -93,7 +93,8 @@ src/ingest/parsers.js    형식 자동 인식 + 읽기
 src/core/                표준 형태 변환, OEE·손실 계산, 패턴 찾기·리포트
 src/reasons/classifier.js 사유 분류 (규칙 + Claude 선택)
 src/live.js              실시간 모드 (빨리 감기, 질문 만들기)
-src/demo.js              데모 데이터 (2주)
+src/demo.js              작업자 답변 흉내 · 평일 날짜 계산
+src/sampleSets.js        예시 파일 묶음 (하루치·일주일치·2주일치)
 public/                  화면 (HTML/CSS/JS)
 test/                    node:test 테스트
 ```
