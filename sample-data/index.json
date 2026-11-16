@@ -1,0 +1,40 @@
+{
+ "date": "2026-11-13",
+ "files": [
+  {
+   "file": "01_press_ct-current_2026-11-13.csv",
+   "format": "ct-csv",
+   "description": "1호기 프레스 · 시판 전류 센서(CT) 1초 로그"
+  },
+  {
+   "file": "02_cnc_mtconnect-sample_2026-11-13.xml",
+   "format": "mtconnect",
+   "description": "2호기 CNC · MTConnect Agent /sample 응답"
+  },
+  {
+   "file": "03_injection_opcua-pubsub_2026-11-13.jsonl",
+   "format": "opcua",
+   "description": "3호기 사출기 · OPC UA PubSub JSON 메시지"
+  },
+  {
+   "file": "04_press_modbus-poll_2026-11-13.csv",
+   "format": "modbus-csv",
+   "description": "1호기 프레스 · Modbus TCP 게이트웨이 5초 폴링 로그"
+  },
+  {
+   "file": "05_all_mes-daily-report_2026-11-13.csv",
+   "format": "mes-csv",
+   "description": "설비 3대 · MES/POP 작업일보 (수기 입력 누락 포함)"
+  },
+  {
+   "file": "06_all_operator-defects_2026-11-13.json",
+   "format": "defects-json",
+   "description": "작업자 카톡 [불량 +1] 입력 기록 (위 파일들과 같은 날짜)"
+  },
+  {
+   "file": "99_ground-truth_2026-11-13.json",
+   "format": "truth",
+   "description": "시뮬레이션 정답 (분석 결과와 비교용, 업로드용 아님)"
+  }
+ ]
+}

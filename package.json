@@ -1,0 +1,19 @@
+{
+  "name": "oee-loss-analyzer",
+  "version": "0.1.0",
+  "description": "멈춘 이유까지 알려 주는 OEE 손실 분석 서비스 (해커톤 프로토타입)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "samples": "node scripts/generate-samples.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "*"
+  },
+  "license": "MIT"
+}

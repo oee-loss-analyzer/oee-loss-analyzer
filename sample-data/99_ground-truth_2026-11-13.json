@@ -1,0 +1,134 @@
+{
+ "PRESS-01": {
+  "stops": [
+   {
+    "start": 29294,
+    "end": 29531,
+    "code": "JAM",
+    "utterance": "슈트 막혀서요"
+   },
+   {
+    "start": 32387,
+    "end": 33518,
+    "code": "MATERIAL",
+    "utterance": "소재 떨어졌어요"
+   },
+   {
+    "start": 39154,
+    "end": 39360,
+    "code": "JAM",
+    "utterance": "취출이 안 돼서 뺐어요"
+   },
+   {
+    "start": 40136,
+    "end": 41543,
+    "code": "SETUP",
+    "utterance": "툴 교체요"
+   },
+   {
+    "start": 47359,
+    "end": 47630,
+    "code": "JAM",
+    "utterance": "볼트 걸려서 뺐어요"
+   },
+   {
+    "start": 51811,
+    "end": 52007,
+    "code": "JAM",
+    "utterance": "스크랩이 엉켜서요"
+   },
+   {
+    "start": 55977,
+    "end": 56152,
+    "code": "JAM",
+    "utterance": "제품이 끼었어요"
+   }
+  ],
+  "cycles": 3716,
+  "defects": 65
+ },
+ "CNC-02": {
+  "stops": [
+   {
+    "start": 38276,
+    "end": 39503,
+    "code": "MATERIAL",
+    "utterance": "레진 건조가 덜 돼서 대기"
+   },
+   {
+    "start": 40479,
+    "end": 41436,
+    "code": "SETUP",
+    "utterance": "다이 교체했어요"
+   },
+   {
+    "start": 49442,
+    "end": 50713,
+    "code": "ADJUST",
+    "utterance": "치수 맞추느라요"
+   },
+   {
+    "start": 54423,
+    "end": 55349,
+    "code": "SETUP",
+    "utterance": "금형 바꿨어요"
+   },
+   {
+    "start": 58413,
+    "end": 59145,
+    "code": "ADJUST",
+    "utterance": "치수 맞추느라요"
+   },
+   {
+    "start": 59985,
+    "end": 60626,
+    "code": "CLEAN",
+    "utterance": "주유하고 점검했어요"
+   }
+  ],
+  "cycles": 476,
+  "defects": 24
+ },
+ "INJ-03": {
+  "stops": [
+   {
+    "start": 29614,
+    "end": 32526,
+    "code": "SETUP",
+    "utterance": "품번 바뀌어서 세팅 중"
+   },
+   {
+    "start": 32635,
+    "end": 33817,
+    "code": "ADJUST",
+    "utterance": "치수 맞추느라요"
+   },
+   {
+    "start": 34894,
+    "end": 35130,
+    "code": "JAM",
+    "utterance": "스크랩이 엉켜서요"
+   },
+   {
+    "start": 37974,
+    "end": 38187,
+    "code": "JAM",
+    "utterance": "볼트 걸려서 뺐어요"
+   },
+   {
+    "start": 55851,
+    "end": 56090,
+    "code": "JAM",
+    "utterance": "볼트 걸려서 뺐어요"
+   },
+   {
+    "start": 57470,
+    "end": 57624,
+    "code": "JAM",
+    "utterance": "스크랩이 엉켜서요"
+   }
+  ],
+  "cycles": 673,
+  "defects": 15
+ }
+}
