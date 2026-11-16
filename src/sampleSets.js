@@ -1,5 +1,5 @@
-// 예시 파일 묶음: 하루치 / 일주일치(평일 5일) / 2주일치(평일 10일)
-// 파일을 디스크에 두지 않고 요청이 올 때 만든다 (2주치 전류 로그는 약 19MB라 저장소에 넣기엔 크다).
+// 예시 파일 묶음: 하루치 / 일주일치(평일 5일)
+// 파일을 디스크에 두지 않고 요청이 올 때 만든다 (일주일치 전류 로그는 약 9MB라 저장소에 넣기엔 크다).
 // 같은 날짜는 언제 만들어도 같은 내용이다 (난수 seed = sample|설비|날짜, sample-data/ 와 동일).
 
 import { MACHINES } from './config.js';
@@ -13,7 +13,6 @@ export const SAMPLE_END = '2026-11-13';
 export const SAMPLE_RANGES = {
   '1d': { days: 1, label: '하루치' },
   '1w': { days: 5, label: '일주일치' },
-  '2w': { days: 10, label: '2주일치' },
 };
 
 const [PRESS, CNC, INJ] = MACHINES;

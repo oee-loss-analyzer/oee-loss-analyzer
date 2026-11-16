@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import { parseFile } from '../src/ingest/parsers.js';
 import { SAMPLE_FILES, buildSampleText, sampleDates, listSamples } from '../src/sampleSets.js';
 
-test('예시 묶음: 하루치·일주일치·2주일치 날짜 수', () => {
+test('예시 묶음: 하루치·일주일치 날짜 수, 2주일치는 없다', () => {
   assert.deepEqual(sampleDates('1d'), ['2026-11-13']);
   assert.equal(sampleDates('1w').length, 5);
-  assert.equal(sampleDates('2w').length, 10);
-  assert.equal(sampleDates('2w').at(-1), '2026-11-13');
+  assert.equal(sampleDates('1w').at(-1), '2026-11-13');
+  assert.throws(() => sampleDates('2w'));
 });
 
 test('예시 묶음: 일주일치 파일을 읽으면 설비마다 5일씩 나온다', () => {

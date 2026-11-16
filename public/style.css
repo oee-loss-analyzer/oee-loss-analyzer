@@ -412,6 +412,8 @@ body.drawer-open .drawer { transform: none; }
 .d-oee.good b { color: var(--ok); } .d-oee.mid b { color: var(--warn); } .d-oee.bad b { color: var(--stop); }
 .drawer .bars .row { grid-template-columns: 110px 1fr 90px; }
 .drawer .scroll { max-height: none; }
+.lb-done { display: table; margin-top: 3px; font-size: 10.5px; padding: 1px 7px; }
+.drawer .bars .row.lb-top { background: var(--accent-soft); border-radius: 8px; padding: 6px 8px; margin: 0 -8px 6px; }
 
 /* ============ 주간 리포트: 카톡 미리보기 ============ */
 .r-layout { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 20px; align-items: start; }

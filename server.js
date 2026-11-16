@@ -51,7 +51,7 @@ function resolveRange(q) {
   const hist = dates.filter((d) => d !== live.date);
   if (q.preset === 'live') return { from: live.date, to: live.date };
   if (q.from && q.to) return { from: q.from, to: q.to };
-  const n = q.preset === '2w' ? 10 : q.preset === '1d' ? 1 : 5;
+  const n = q.preset === '1d' ? 1 : 5;
   const sel = hist.slice(-n);
   return { from: sel[0] ?? live.date, to: sel.at(-1) ?? live.date };
 }
@@ -179,7 +179,7 @@ const routes = {
     return { text: await writeReportWithClaude(r.facts), template: r.text };
   },
   'POST /api/import': (b) => importText(b.content ?? '', { format: b.format, filename: b.filename }),
-  // 예시 파일 묶음을 서버에서 바로 가져온다 (2주치 전류 로그는 19MB라 브라우저로 주고받지 않는다)
+  // 예시 파일 묶음을 서버에서 바로 가져온다 (일주일치 전류 로그는 9MB라 브라우저로 주고받지 않는다)
   'POST /api/samples/import': (b) => {
     const f = SAMPLE_FILES.find((x) => x.key === b.key);
     if (!f) throw httpError(404, '알 수 없는 예시 파일입니다.');
@@ -238,7 +238,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(out));
       return;
     }
-    const set = /^\/samples\/set\/(1d|1w|2w)\/([a-z]+)$/.exec(url.pathname);
+    const set = /^\/samples\/set\/(1d|1w)\/([a-z]+)$/.exec(url.pathname);
     if (set) {
       const [, range, key] = set;
       const text = buildSampleText(range, key);

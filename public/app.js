@@ -346,7 +346,7 @@ function renderKakao(f, trend, empty) {
     $('#ktDate').textContent = '';
     $('#ktChat').innerHTML = `<div class="kt-day">매주 월요일 오전 8시 자동 발송</div>
       <div class="kt-from"><span class="kt-avatar">🏭</span><b>OEE 리포트봇</b></div>
-      ${ktBubble('<div class="kt-title">아직 보낼 리포트가 없어요</div>데이터 연결 탭에서 예시 파일(하루치 · 일주일치 · 2주일치)을 가져오면 이곳에 그래프 리포트가 만들어져요.<button type="button" class="kt-btn" data-goto="data">데이터 연결로 가기</button>')}`;
+      ${ktBubble('<div class="kt-title">아직 보낼 리포트가 없어요</div>데이터 연결 탭에서 예시 파일(하루치 · 일주일치)을 가져오면 이곳에 그래프 리포트가 만들어져요.<button type="button" class="kt-btn" data-goto="data">데이터 연결로 가기</button>')}`;
     return;
   }
   const md = (d) => d.slice(5).replace('-', '/');
@@ -419,7 +419,7 @@ const REAL_DATA = [
   { name: 'CWRU 베어링 데이터 센터', url: 'https://engineering.case.edu/bearingdatacenter', note: '진동 기반 고장 진단(2단계 기능)의 표준 벤치마크' },
 ];
 
-// ---------- 예시 파일 (하루치 · 일주일치 · 2주일치 / 보기 · 저장 · 가져오기) ----------
+// ---------- 예시 파일 (하루치 · 일주일치 / 보기 · 저장 · 가져오기) ----------
 let exFiles = [];
 let exRange = '1d';
 let exInfo = null;
@@ -625,6 +625,12 @@ async function openDrawer(date, machine) {
   const tl = a.timelines[0];
   $('#dTl').innerHTML = tl?.timeline?.length ? timelineBar(tl.timeline, tl.untilSec) : '<p class="muted">시각 정보가 없는 데이터예요 (작업일보 합계).</p>';
   lossBars($('#dLosses'), t);
+  // 사유를 모두 채웠으면 손실 순위 1위(가장 큰 손실)에만 "조치 완료" 배지를 단다
+  if (a.stops.length && !a.stops.some((x) => x.loss === 'unknown')) {
+    const top = $('#dLosses .bars .row');
+    top?.classList.add('lb-top');
+    top?.firstElementChild.insertAdjacentHTML('beforeend', '<span class="ck-badge done lb-done">조치 완료</span>');
+  }
   const stops = [...a.stops].sort((x, y) => (x.start ?? Infinity) - (y.start ?? Infinity));
   $('#dStops').innerHTML = stopsTable(stops, { withDate: false });
   document.body.classList.add('drawer-open');
