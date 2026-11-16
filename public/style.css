@@ -321,6 +321,48 @@ a.btn:hover { border-color: var(--ink-2); }
 .reset-line { text-align: center; color: var(--muted); font-size: 12.5px; margin: 24px 0 0; }
 button.link { border: none; background: none; box-shadow: none; padding: 0; color: var(--stop); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 
+/* ============ 데이터 연결: 점검 결과 ============ */
+#uploadResult:not(:empty) { margin-bottom: 16px; scroll-margin-top: 90px; }
+.ck-sum { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; font-size: 13.5px; color: var(--muted); }
+.ck-sum b { color: var(--ink); font-size: 15.5px; letter-spacing: -.03em; }
+.ck-badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px; border: 1.5px solid currentColor; white-space: nowrap; }
+.ck-badge.action { color: var(--stop); background: var(--stop-soft); }
+.ck-badge.review { color: var(--warn); background: var(--warn-soft); }
+.ck-badge.ok { color: var(--ok); background: var(--ok-soft); }
+.ck-list { display: grid; gap: 12px; }
+.ck { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: var(--r); padding: 14px 18px; box-shadow: var(--shadow); }
+.ck.action { border-left-color: var(--stop); }
+.ck.review { border-left-color: var(--warn); }
+.ck-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.ck-file { display: flex; flex-direction: column; min-width: 0; }
+.ck-file b { font-size: 15px; letter-spacing: -.03em; }
+.ck-file span { font: 11.5px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.ck-row { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-2); margin-bottom: 6px; }
+.ck-who { display: flex; flex-direction: column; font-size: 13px; }
+.ck-who b { font-size: 14px; }
+.ck-who span { font: 11.5px var(--mono); color: var(--muted); }
+.ck-nums { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+.ck-nums > span { display: flex; flex-direction: column; font-size: 13px; }
+.ck-nums em { font-style: normal; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.ck-nums b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.ck-nums b.hot { color: var(--stop); }
+.ck-oee b { font-size: 20px; letter-spacing: -.03em; }
+.ck-oee.good b { color: var(--ok); } .ck-oee.mid b { color: var(--warn); } .ck-oee.bad b { color: var(--stop); }
+.ck-top .tag { margin-right: 4px; }
+.ck-top { flex-direction: column; }
+.ck-go { padding: 6px 12px; font-size: 12.5px; white-space: nowrap; }
+.ck-issues { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.ck-issues li { position: relative; padding-left: 16px; }
+.ck-issues li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.ck-issues li.action::before { background: var(--stop); }
+.ck-fine { margin: 8px 0 0; font-size: 13px; color: var(--ok); font-weight: 600; }
+.ck-todo { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.ck-todo span { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; color: var(--stop); background: var(--stop-soft); border: 1.5px solid currentColor; white-space: nowrap; }
+@media (max-width: 760px) {
+  .ck-row { grid-template-columns: 1fr; gap: 8px; }
+  .ck-go { justify-self: start; }
+}
+
 /* ============ 작업자 질문 (카톡) ============ */
 .modal { position: fixed; inset: 0; background: rgba(10, 12, 22, .5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
 .modal[hidden] { display: none; }

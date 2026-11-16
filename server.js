@@ -57,6 +57,34 @@ function resolveRange(q) {
   return { from: sel[0] ?? live.date, to: sel.at(-1) ?? live.date };
 }
 
+// 파일을 가져온 직후 보여 줄 점검 결과: 설비·날짜별 OEE와 "먼저 확인할 것"
+function checkImport(days, defects, attached) {
+  const items = days.map((d) => {
+    const r = store.analyze({ from: d.date, to: d.date, machineId: d.machineId })[0];
+    const m = MACHINES.find((x) => x.id === d.machineId);
+    const unknown = r.stops.filter((s) => s.loss === 'unknown');
+    const top = Object.entries(r.losses).sort((x, y) => y[1] - x[1])[0];
+    const issues = [];
+    if (unknown.length) issues.push({ level: 'action', text: `사유가 빈 정지 ${unknown.length}건 (합계 ${Math.round(unknown.reduce((a, s) => a + s.dur, 0) / 60)}분)`, todo: '정지 기록에서 사유 입력' });
+    for (const w of r.warnings) issues.push({ level: 'review', text: w });
+    return {
+      machineId: d.machineId, machineName: m?.name ?? d.machineId, date: d.date,
+      oee: r.oee, availability: r.availability, performance: r.performance, quality: r.quality,
+      stops: r.stops.length, unknown: unknown.length, count: r.count, defectCount: r.defectCount,
+      topLoss: top && top[1] > 0 ? { loss: top[0], label: LOSS[top[0]].label, sec: top[1] } : null,
+      status: issues.some((i) => i.level === 'action') ? 'action' : issues.length ? 'review' : 'ok',
+      issues,
+    };
+  });
+  if (!days.length && defects.length) {
+    const ok = attached > 0;
+    return { kind: 'defects', status: ok ? 'ok' : 'review', defects: defects.length, attached,
+      issues: ok ? [] : [{ level: 'review', text: '불량을 붙일 설비·날짜의 가동 기록이 없습니다.', todo: '같은 날짜의 가동 기록 파일을 먼저 올리기' }] };
+  }
+  const status = items.some((i) => i.status === 'action') ? 'action' : items.some((i) => i.status === 'review') ? 'review' : 'ok';
+  return { kind: 'days', status, items };
+}
+
 function analysis(q) {
   const { from, to } = resolveRange(q);
   const results = store.analyze({ from, to, machineId: q.machine || undefined });
@@ -143,7 +171,11 @@ const routes = {
     const rec = { at: new Date().toISOString(), file: b.filename ?? '(붙여넣기)', format, days: days.length, defects: attached };
     store.imports.push(rec);
     store.save();
-    return { ...rec, imported: days.map((d) => ({ machineId: d.machineId, date: d.date, stops: d.stops.length, count: d.count })) };
+    return {
+      ...rec,
+      imported: days.map((d) => ({ machineId: d.machineId, date: d.date, stops: d.stops.length, count: d.count })),
+      check: checkImport(days, defects, attached),
+    };
   },
   'GET /api/imports': () => store.imports.slice(-30).reverse(),
   'GET /api/samples': () => {

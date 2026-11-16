@@ -250,7 +250,9 @@ $('#qMic').onclick = () => {
 async function loadAnalysis() {
   const preset = $('#aPreset').value;
   const machine = $('#aMachine').value;
-  const a = await api(`/api/analysis?preset=${preset}&machine=${machine}`);
+  // "date:2026-11-13" 은 파일을 가져온 날짜 하루만 본다 (점검 결과의 "손실 분석에서 보기")
+  const q = preset.startsWith('date:') ? `from=${preset.slice(5)}&to=${preset.slice(5)}` : `preset=${preset}`;
+  const a = await api(`/api/analysis?${q}&machine=${machine}`);
   $('#aRange').textContent = `${a.range.from} ~ ${a.range.to}`;
   kpis($('#aKpis'), a.total);
   lossBars($('#aLosses'), a.total);
@@ -422,22 +424,87 @@ $('#exImportAll').onclick = async () => {
 };
 
 // 파일 여러 개를 차례로 가져오고 결과를 보여 준다 (샘플·내 파일 공통)
+const CK_STATUS = {
+  action: { label: '조치 필요', cls: 'action' },
+  review: { label: '검토 필요', cls: 'review' },
+  ok: { label: '정상', cls: 'ok' },
+  error: { label: '읽기 실패', cls: 'action' },
+};
+const machineName = (id) => CFG.machines.find((m) => m.id === id)?.name ?? id;
+
+// 점검 결과 카드 한 장 (파일 하나)
+function checkCard(it, r, err) {
+  const st = CK_STATUS[err ? 'error' : r.check.status];
+  const head = `<div class="ck-head">
+    <span class="ck-file"><b>${esc(it.label ?? it.name)}</b><span>${[it.label && it.label !== it.name ? esc(it.name) : '', r ? esc(sourceLabel(r.format)) : ''].filter(Boolean).join(' · ')}</span></span>
+    <span class="ck-badge ${st.cls}">${st.label}</span></div>`;
+  if (err) {
+    return `<div class="ck ${st.cls}">${head}<ul class="ck-issues"><li class="action">${esc(err.message)}</li></ul>
+      <div class="ck-todo"><span>먼저 할 일</span>지원하는 형식(CSV · XML · JSON)인지, 파일이 잘리지 않았는지 확인</div></div>`;
+  }
+  const c = r.check;
+  let body = '';
+  if (c.kind === 'defects') {
+    body = `<div class="ck-row"><div class="ck-who">작업자 불량 기록</div><div class="ck-nums"><span><em>불량 입력</em><b>${c.defects}건</b></span><span><em>연결된 기록</em><b>${c.attached}건</b></span></div></div>`;
+  } else {
+    body = c.items.map((d) => `<div class="ck-row">
+      <div class="ck-who"><b>${esc(d.machineName)}</b><span>${esc(d.date)}</span></div>
+      <div class="ck-nums">
+        <span class="ck-oee ${d.oee >= 0.75 ? 'good' : d.oee >= 0.6 ? 'mid' : 'bad'}"><em>OEE</em><b>${pct(d.oee)}</b></span>
+        <span><em>정지</em><b>${d.stops}건</b></span>
+        <span><em>사유 없음</em><b class="${d.unknown ? 'hot' : ''}">${d.unknown}건</b></span>
+        <span class="ck-top"><em>가장 큰 손실</em>${d.topLoss ? `${lossTag(d.topLoss.loss)} <b>${hrs(d.topLoss.sec)}</b>` : '<b>-</b>'}</span>
+      </div>
+      <button type="button" class="ck-go" data-date="${esc(d.date)}" data-machine="${esc(d.machineId)}" title="이 설비·날짜만 손실 분석에서 보기">분석 보기 →</button>
+    </div>`).join('');
+  }
+  const issues = c.kind === 'defects' ? c.issues : c.items.flatMap((d) => d.issues.map((i) => ({ ...i, who: c.items.length > 1 ? d.machineName : '' })));
+  const todo = issues.find((i) => i.todo);
+  return `<div class="ck ${st.cls}">${head}${body}
+    ${issues.length ? `<ul class="ck-issues">${issues.map((i) => `<li class="${i.level}">${i.who ? `<b>${esc(i.who)}</b> · ` : ''}${esc(i.text)}</li>`).join('')}</ul>` : '<p class="ck-fine">문제없이 읽었어요. 바로 분석에 쓸 수 있습니다.</p>'}
+    ${todo ? `<div class="ck-todo"><span>먼저 할 일</span>${esc(todo.todo)}</div>` : ''}
+  </div>`;
+}
+
+// 파일 여러 개를 차례로 가져오고 점검 결과를 보여 준다 (예시·내 파일 공통)
 async function importFiles(items) {
-  const out = [];
+  const cards = [];
+  const count = { action: 0, review: 0, ok: 0 };
+  $('#uploadResult').innerHTML = `<div class="ck-sum"><b>점검 중…</b> 파일 ${items.length}개</div>`;
   for (const it of items) {
     try {
       const r = await api('/api/import', { filename: it.name, content: await it.read(), format: it.format ?? 'auto' });
-      const what = r.imported.length ? `${r.imported.length}개 설비·일, 정지 ${r.imported.reduce((n, d) => n + d.stops, 0)}건` : `불량 ${r.defects}건 연결`;
-      out.push(`<div class="result">✔ <b>${esc(it.label ?? it.name)}</b> <span class="muted">· ${esc(sourceLabel(r.format))} · ${what}</span></div>`);
+      count[r.check.status]++;
+      cards.push(checkCard(it, r));
     } catch (e) {
-      out.push(`<div class="result err">✖ <b>${esc(it.label ?? it.name)}</b> · ${esc(e.message)}</div>`);
+      count.action++;
+      cards.push(checkCard(it, null, e));
     }
   }
-  $('#uploadResult').innerHTML = out.join('') + '<p class="hint">"손실 분석" 탭에서 기간을 바꿔 확인하세요. 가져온 데이터는 정지 사유가 비어 있어서, 정지 기록에서 직접 입력할 수 있어요.</p>';
+  $('#uploadResult').innerHTML = `<div class="ck-sum"><b>점검 결과</b><span>파일 ${items.length}개</span>
+      ${count.action ? `<span class="ck-badge action">조치 필요 ${count.action}</span>` : ''}
+      ${count.review ? `<span class="ck-badge review">검토 필요 ${count.review}</span>` : ''}
+      ${count.ok ? `<span class="ck-badge ok">정상 ${count.ok}</span>` : ''}</div>
+    <div class="ck-list">${cards.join('')}</div>`;
+  $('#uploadResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const cfg = await api('/api/config');
   CFG.dates = cfg.dates;
   loadData();
 }
+
+// 점검 결과에서 "분석 보기" → 그 설비·날짜만 손실 분석에서 연다
+$('#uploadResult').onclick = (e) => {
+  const b = e.target.closest('.ck-go');
+  if (!b) return;
+  const { date, machine } = b.dataset;
+  const sel = $('#aPreset');
+  let opt = [...sel.options].find((o) => o.value === `date:${date}`);
+  if (!opt) { opt = new Option(`${date} (가져온 날)`, `date:${date}`); sel.add(opt, 0); }
+  sel.value = opt.value;
+  $('#aMachine').value = machine;
+  document.querySelector('#tabs [data-tab="analysis"]').click();
+  scrollTo({ top: 0 });
+};
 
 // 내 파일: 끌어다 놓기 또는 눌러서 고르기
 const fromFiles = (list) => [...list].map((f) => ({ name: f.name, read: () => f.text() }));
