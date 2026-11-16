@@ -365,20 +365,9 @@ async function loadReport() {
   const [r, a] = await Promise.all([api(`/api/report?preset=${preset}`), api(`/api/analysis?preset=${preset}`)]);
   $('#rText').textContent = r.text;
   renderKakao(r.facts, a.trend, !a.total.days);
-  $('#btnAi').disabled = !CFG.llm.enabled;
-  $('#rHint').textContent = CFG.llm.enabled ? `모델: ${CFG.llm.model}` : 'Claude로 다듬기는 서버에 ANTHROPIC_API_KEY 가 있을 때 켜집니다.';
 }
 $('#rPreset').onchange = loadReport;
 $('#btnCopy').onclick = async () => { await navigator.clipboard.writeText($('#rText').textContent); toast('리포트를 복사했습니다.'); };
-$('#btnAi').onclick = async () => {
-  $('#btnAi').disabled = true;
-  $('#rAi').textContent = 'Claude가 작성 중입니다...';
-  try {
-    const r = await api('/api/report/ai', { preset: $('#rPreset').value });
-    $('#rAi').textContent = r.text;
-    $('#rAi').classList.remove('muted');
-  } catch (e) { $('#rAi').textContent = `실패: ${e.message}`; } finally { $('#btnAi').disabled = false; }
-};
 
 // ---------- 데이터 연결 ----------
 const REAL_DATA = [

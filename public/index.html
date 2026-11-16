@@ -128,8 +128,6 @@
           </select>
         </label>
         <button id="btnCopy">📋 복사</button>
-        <button id="btnAi" class="primary">✨ Claude로 다듬기</button>
-        <span class="hint" id="rHint"></span>
       </div>
       <div class="r-layout">
         <!-- 카톡 미리보기: 매주 월요일 공장장 휴대폰에 이렇게 도착한다 -->
@@ -138,8 +136,7 @@
           <div class="kt-chat" id="ktChat"></div>
         </div>
         <div class="r-side">
-          <div class="card kakao"><h3>Claude가 다듬은 리포트</h3><pre id="rAi" class="muted">API 키가 있으면 분석 숫자만 사용해서 문장을 다듬어 줍니다.</pre></div>
-          <details class="card hist">
+          <details class="card hist" open>
             <summary><h3>텍스트로 보기 <small>📋 복사로 보내는 원문</small></h3></summary>
             <div class="kakao"><pre id="rText"></pre></div>
           </details>
