@@ -269,10 +269,6 @@ async function loadAnalysis() {
       return `<td style="background:rgba(217,72,15,${(alpha * 0.85).toFixed(2)});color:${alpha > 0.55 ? '#fff' : 'inherit'}" title="가용 ${Math.round(v.avail)}분 · 성능 ${Math.round(v.perf)}분 / 계획 ${Math.round(v.planned)}분">${Math.round(v.total)}</td>`;
     }).join('')}</tr>`).join('')}</tbody></table><div class="legend">칸이 진할수록 그 시간대에 잃은 시간 비율이 큽니다. 작업일보(합계) 데이터는 시간대를 알 수 없어 빠집니다.</div>` : '<p class="muted">시간대 정보가 있는 데이터가 없습니다.</p>';
 
-  // 사유
-  $('#aReasons').innerHTML = `<table><thead><tr><th>사유</th><th>손실 분류</th><th class="num">횟수</th><th class="num">합계</th><th>작업자 답변 예</th></tr></thead><tbody>
-    ${a.reasons.map((r) => `<tr><td>${esc(r.label)}</td><td>${lossTag(r.loss)}</td><td class="num">${r.count}</td><td class="num">${hrs(r.sec)}</td><td class="muted">${r.examples.map((x) => `“${esc(x)}”`).join(' ')}</td></tr>`).join('')}</tbody></table>`;
-
   lastStops = a.stops;
   renderStops();
   $('#aWarnings').innerHTML = a.warnings.map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('');

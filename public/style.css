@@ -226,7 +226,7 @@ th { color: var(--muted); font-weight: 650; font-size: 12px; background: var(--c
 th:first-child { border-top-left-radius: 8px; } th:last-child { border-top-right-radius: 8px; }
 tbody tr:hover td { background: var(--card-2); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.card > div:has(> table), #aStops, #aReasons, #aHourly, #samples, #imports { overflow-x: auto; }
+.card > div:has(> table), #aStops, #aHourly, #samples, #imports { overflow-x: auto; }
 .scroll { max-height: 440px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .scroll th { border-radius: 0 !important; }
 .heat td { text-align: center; font-variant-numeric: tabular-nums; font-size: 12.5px; border-bottom: 2px solid var(--card); border-right: 2px solid var(--card); }
