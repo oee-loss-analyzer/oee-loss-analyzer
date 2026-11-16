@@ -146,7 +146,14 @@ const routes = {
     return { ...rec, imported: days.map((d) => ({ machineId: d.machineId, date: d.date, stops: d.stops.length, count: d.count })) };
   },
   'GET /api/imports': () => store.imports.slice(-30).reverse(),
-  'GET /api/samples': () => JSON.parse(fs.readFileSync(path.join(SAMPLES, 'index.json'), 'utf8')),
+  'GET /api/samples': () => {
+    const idx = JSON.parse(fs.readFileSync(path.join(SAMPLES, 'index.json'), 'utf8'));
+    // 화면의 파일 고르기 창에 크기를 보여 주려고 붙인다
+    for (const f of idx.files) {
+      try { f.size = fs.statSync(path.join(SAMPLES, f.file)).size; } catch { f.size = null; }
+    }
+    return idx;
+  },
   'POST /api/demo/reload': () => {
     store.clear();
     const r = loadDemo(store, { today: todayLocal() });

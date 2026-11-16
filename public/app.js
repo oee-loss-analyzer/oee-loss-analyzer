@@ -137,8 +137,7 @@ function renderLive() {
     if (arr.length > 120) arr.shift();
     const peak = Math.max(...arr, CFG.machines.find((x) => x.id === m.id).peakCurrentA);
     el.querySelector('polyline').setAttribute('points', arr.map((v, i) => `${(i / 119) * 120},${44 - (v / peak) * 42}`).join(' '));
-    const r = lastLiveAnalysis?.days.find((d) => d.machineId === m.id);
-    el.querySelector('.mstats').innerHTML = `<span>생산 <b>${m.count.toLocaleString('ko-KR')}</b>개</span><span>불량 <b>${m.defects}</b>개</span>${r ? `<span>OEE <b>${pct(r.oee)}</b></span>` : ''}<span>전류 센서(CT)</span>`;
+    el.querySelector('.mstats').innerHTML = `<span>생산 <b>${m.count.toLocaleString('ko-KR')}</b>개</span><span>불량 <b>${m.defects}</b>개</span>`;
     const tl = lastLiveAnalysis?.timelines.find((t) => t.machineId === m.id);
     if (tl) el.querySelector('.mtl').innerHTML = timelineBar(tl.timeline, tl.untilSec);
   }
@@ -252,7 +251,7 @@ async function loadAnalysis() {
   const preset = $('#aPreset').value;
   const machine = $('#aMachine').value;
   const a = await api(`/api/analysis?preset=${preset}&machine=${machine}`);
-  $('#aRange').textContent = `${a.range.from} ~ ${a.range.to} · 데이터 출처: ${a.sources.map(sourceLabel).join(', ')}`;
+  $('#aRange').textContent = `${a.range.from} ~ ${a.range.to}`;
   kpis($('#aKpis'), a.total);
   lossBars($('#aLosses'), a.total);
   $('#aInsights').innerHTML = a.insights.length ? `<ul class="insights">${a.insights.map((i) => `<li class="${i.level}">${esc(i.text)}</li>`).join('')}</ul>` : '<p class="muted">데이터가 더 쌓이면 패턴을 찾아 드립니다.</p>';
@@ -268,15 +267,6 @@ async function loadAnalysis() {
       return `<td style="background:rgba(217,72,15,${(alpha * 0.85).toFixed(2)});color:${alpha > 0.55 ? '#fff' : 'inherit'}" title="가용 ${Math.round(v.avail)}분 · 성능 ${Math.round(v.perf)}분 / 계획 ${Math.round(v.planned)}분">${Math.round(v.total)}</td>`;
     }).join('')}</tr>`).join('')}</tbody></table><div class="legend">칸이 진할수록 그 시간대에 잃은 시간 비율이 큽니다. 작업일보(합계) 데이터는 시간대를 알 수 없어 빠집니다.</div>` : '<p class="muted">시간대 정보가 있는 데이터가 없습니다.</p>';
 
-  // 설비 비교
-  $('#aMachines').innerHTML = `<table><thead><tr><th>설비</th><th class="num">OEE</th><th>가장 큰 손실</th><th class="num">고장</th><th class="num">MTTR</th><th class="num">MTBF</th><th class="num">셋업 평균</th></tr></thead><tbody>
-    ${a.machines.filter((m) => m.days).map((m) => `<tr><td>${esc(m.name)}</td><td class="num"><b>${pct(m.agg.oee)}</b></td><td>${m.topLoss && m.topLoss[1] > 0 ? `${lossTag(m.topLoss[0])} ${hrs(m.topLoss[1])}` : '-'}</td>
-    <td class="num">${m.breakdowns}회</td><td class="num">${m.mttrMin ? `${Math.round(m.mttrMin)}분` : '-'}</td><td class="num">${m.mtbfHours ? `${m.mtbfHours.toFixed(1)}h` : '-'}</td><td class="num">${m.avgSetupMin ? `${Math.round(m.avgSetupMin)}분` : '-'}</td></tr>`).join('')}
-    </tbody></table><div class="legend">MTTR: 평균 수리 시간 · MTBF: 평균 고장 간격(가동 시간 기준)</div>`;
-
-  // 추세
-  $('#aTrend').innerHTML = a.trend.length ? `<div class="trend">${a.trend.map((t) => `<div class="col"><div class="pct">${Math.round(t.oee * 100)}</div><div class="bar" style="height:${Math.max(4, t.oee * 100)}%"></div><div>${t.date.slice(5)}(${t.weekday})</div></div>`).join('')}</div>` : '';
-
   // 사유
   $('#aReasons').innerHTML = `<table><thead><tr><th>사유</th><th>손실 분류</th><th class="num">횟수</th><th class="num">합계</th><th>작업자 답변 예</th></tr></thead><tbody>
     ${a.reasons.map((r) => `<tr><td>${esc(r.label)}</td><td>${lossTag(r.loss)}</td><td class="num">${r.count}</td><td class="num">${hrs(r.sec)}</td><td class="muted">${r.examples.map((x) => `“${esc(x)}”`).join(' ')}</td></tr>`).join('')}</tbody></table>`;
@@ -290,6 +280,7 @@ $('#aMachine').onchange = loadAnalysis;
 
 // 정지 기록 정렬 (화면에서만 바꾼다)
 let lastStops = [];
+const hiddenLoss = new Set(); // 정지 기록에서 숨긴 손실 분류
 const LOSS_ORDER = ['breakdown', 'setup', 'waiting', 'other_stop', 'unknown', 'minor_stop', 'speed', 'defect', 'startup'];
 const machineOrder = (id) => CFG.machines.findIndex((m) => m.id === id);
 function renderStops() {
@@ -301,13 +292,44 @@ function renderStops() {
     machine: (x, y) => machineOrder(x.machineId) - machineOrder(y.machineId) || byTime(x, y), // 1·2·3호기 순서
     loss: (x, y) => LOSS_ORDER.indexOf(x.loss) - LOSS_ORDER.indexOf(y.loss) || byTime(x, y),
   };
-  const sorted = [...lastStops].sort(sorters[$('#aSort').value] ?? byTime);
-  $('#aStops').innerHTML = stopsTable(sorted);
+  renderLossFilter();
+  const shown = lastStops.filter((s) => !hiddenLoss.has(s.loss));
+  const sorted = shown.sort(sorters[$('#aSort').value] ?? byTime);
+  $('#aStops').innerHTML = lastStops.length && !shown.length ? '<p class="muted">선택한 손실 분류에 해당하는 정지가 없습니다.</p>' : stopsTable(sorted);
 }
+
+// 정지 기록 손실 분류 필터 (체크를 끈 분류는 표에서 숨긴다)
+function renderLossFilter() {
+  const counts = {};
+  for (const s of lastStops) counts[s.loss] = (counts[s.loss] ?? 0) + 1;
+  const present = LOSS_ORDER.filter((k) => counts[k]);
+  if (!present.length) { $('#aLossFilter').innerHTML = ''; return; }
+  const allOn = present.every((k) => !hiddenLoss.has(k));
+  $('#aLossFilter').innerHTML = `<span class="lf-label">손실 분류</span>
+    <button type="button" class="lf-all${allOn ? ' on' : ''}" data-all="1">전체</button>
+    ${present.map((k) => {
+      const L = CFG.loss[k];
+      const on = !hiddenLoss.has(k);
+      return `<label class="lf-chip${on ? ' on' : ''}" style="--c:${L.color}"><input type="checkbox" data-loss="${k}"${on ? ' checked' : ''}><i></i>${esc(L.label)} <span>${counts[k]}</span></label>`;
+    }).join('')}`;
+}
+$('#aLossFilter').addEventListener('change', (e) => {
+  const k = e.target.dataset?.loss;
+  if (!k) return;
+  if (e.target.checked) hiddenLoss.delete(k); else hiddenLoss.add(k);
+  renderStops();
+});
+$('#aLossFilter').addEventListener('click', (e) => {
+  if (!e.target.closest('[data-all]')) return;
+  const present = [...new Set(lastStops.map((s) => s.loss))];
+  const allOn = present.every((k) => !hiddenLoss.has(k));
+  if (allOn) present.forEach((k) => hiddenLoss.add(k)); else hiddenLoss.clear();
+  renderStops();
+});
 $('#aSort').onchange = renderStops;
 
 function sourceLabel(s) {
-  return { 'ct-csv': '전류 센서 CSV', mtconnect: 'MTConnect', opcua: 'OPC UA', 'modbus-csv': 'Modbus', 'mes-csv': 'MES 작업일보', 'live-ct': '실시간 전류 센서', test: '테스트' }[s] ?? s;
+  return { 'ct-csv': '전류 센서 CSV', mtconnect: 'MTConnect', opcua: 'OPC UA', 'modbus-csv': 'Modbus', 'mes-csv': 'MES 작업일보', 'defects-json': '불량 입력 기록', 'live-ct': '실시간 전류 센서', test: '테스트' }[s] ?? s;
 }
 
 // ---------- 리포트 ----------
@@ -342,30 +364,98 @@ const REAL_DATA = [
   { name: 'CWRU 베어링 데이터 센터', url: 'https://engineering.case.edu/bearingdatacenter', note: '진동 기반 고장 진단(2단계 기능)의 표준 벤치마크' },
 ];
 
-async function loadData() {
-  const s = await api('/api/samples');
-  $('#samples').innerHTML = `<p class="muted">날짜: ${s.date} · 받아서 위에 그대로 올려 보세요.</p><table><tbody>${s.files.map((f) => `<tr><td><a href="/samples/${encodeURIComponent(f.file)}" download>${esc(f.file)}</a></td><td class="muted">${esc(f.description)}</td></tr>`).join('')}</tbody></table>`;
-  const imp = await api('/api/imports');
-  $('#imports').innerHTML = imp.length ? `<table><thead><tr><th>시각</th><th>파일</th><th>형식</th><th class="num">설비·일</th></tr></thead><tbody>${imp.map((i) => `<tr><td>${new Date(i.at).toLocaleString('ko-KR')}</td><td>${esc(i.file)}</td><td>${esc(sourceLabel(i.format))}</td><td class="num">${i.days}${i.defects ? ` · 불량 ${i.defects}` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">아직 없습니다.</p>';
-  $('#realData').innerHTML = `<p class="muted">아래 데이터는 대부분 예지보전·품질용이라 "정지 사유"가 없습니다. 그 빈칸을 채우는 것이 이 서비스의 역할입니다.</p><ul class="links">${REAL_DATA.map((d) => `<li><a href="${d.url}" target="_blank" rel="noopener">${esc(d.name)}</a> — <span class="muted">${esc(d.note)}</span></li>`).join('')}</ul>`;
+// ---------- 예시 파일 (보기 · 저장 · 바로 가져오기) ----------
+let exFiles = [];
+function fmtSize(n) {
+  if (n == null) return '';
+  return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
 }
-$('#btnUpload').onclick = async () => {
-  const files = [...$('#file').files];
-  if (!files.length) { toast('파일을 먼저 고르세요.'); return; }
+// 예시 파일을 쉬운 이름으로 보여 준다 (설비는 설명 앞부분에서 가져온다)
+const EX_TITLE = {
+  'ct-csv': '전류 센서 로그', mtconnect: 'CNC 가동 기록', opcua: '사출기 가동 기록',
+  'modbus-csv': 'PLC 신호 로그', 'mes-csv': 'MES 작업일보', 'defects-json': '작업자 불량 입력',
+};
+function exParts(f) {
+  const parts = f.description.split('·').map((x) => x.trim());
+  const who = parts.length > 1 ? parts[0] : '설비 3대';
+  return { who, what: EX_TITLE[f.format] ?? parts.at(-1).replace(/\s*\(.*\)$/, '') };
+}
+const sampleUrl = (f) => `/samples/${encodeURIComponent(f.file)}`;
+function renderExamples() {
+  const FILE_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>';
+  const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
+  $('#exList').innerHTML = exFiles.map((f, i) => {
+    const { who, what } = exParts(f);
+    return `<tr>
+      <td><span class="ex-name">${FILE_ICO}<b>${esc(what)}</b><span>${esc(who)}</span></span></td>
+      <td class="muted">${esc(sourceLabel(f.format))}</td>
+      <td class="num muted">${fmtSize(f.size)}</td>
+      <td class="ex-act"><button type="button" class="icon-btn" data-view="${i}" title="내용 보기" aria-label="${esc(what)} 내용 보기">${EYE}</button><a class="icon-btn" href="${sampleUrl(f)}" download="${esc(f.file)}" title="저장" aria-label="${esc(what)} 저장">${DOWN}</a></td>
+    </tr>`;
+  }).join('');
+}
+$('#exList').onclick = async (e) => {
+  const b = e.target.closest('[data-view]');
+  if (!b) return;
+  const f = exFiles[+b.dataset.view];
+  const text = await fetch(sampleUrl(f)).then((r) => r.text());
+  const lines = text.split('\n');
+  const SHOW = 60;
+  $('#vTitle').textContent = exParts(f).what;
+  $('#vMeta').textContent = `${f.file} · ${fmtSize(f.size)} · ${lines.length.toLocaleString('ko-KR')}줄${lines.length > SHOW ? ` (앞 ${SHOW}줄만 보여 줍니다)` : ''}`;
+  $('#vBody').textContent = lines.slice(0, SHOW).join('\n');
+  $('#vSave').href = sampleUrl(f);
+  $('#vSave').setAttribute('download', f.file);
+  $('#viewer').hidden = false;
+};
+const closeViewer = () => { $('#viewer').hidden = true; };
+$('#vClose').onclick = closeViewer;
+$('#viewer').onclick = (e) => { if (e.target.id === 'viewer') closeViewer(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#viewer').hidden) closeViewer(); });
+$('#exImportAll').onclick = async () => {
+  const btn = $('#exImportAll');
+  btn.disabled = true; btn.textContent = '가져오는 중…';
+  try {
+    await importFiles(exFiles.map((f) => ({ name: f.file, label: exParts(f).what, format: f.format, read: () => fetch(sampleUrl(f)).then((r) => r.text()) })));
+  } finally { btn.disabled = false; btn.textContent = '전부 바로 가져오기'; }
+};
+
+// 파일 여러 개를 차례로 가져오고 결과를 보여 준다 (샘플·내 파일 공통)
+async function importFiles(items) {
   const out = [];
-  for (const f of files) {
+  for (const it of items) {
     try {
-      const r = await api('/api/import', { filename: f.name, content: await f.text(), format: $('#fileFormat').value });
-      out.push(`<div class="result">✔ ${esc(f.name)} → ${esc(sourceLabel(r.format))}, ${r.imported.map((d) => `${d.machineId} ${d.date} (정지 ${d.stops}건, 생산 ${d.count}개)`).join(', ') || `불량 ${r.defects}건 연결`}</div>`);
+      const r = await api('/api/import', { filename: it.name, content: await it.read(), format: it.format ?? 'auto' });
+      const what = r.imported.length ? `${r.imported.length}개 설비·일, 정지 ${r.imported.reduce((n, d) => n + d.stops, 0)}건` : `불량 ${r.defects}건 연결`;
+      out.push(`<div class="result">✔ <b>${esc(it.label ?? it.name)}</b> <span class="muted">· ${esc(sourceLabel(r.format))} · ${what}</span></div>`);
     } catch (e) {
-      out.push(`<div class="result err">✖ ${esc(f.name)}: ${esc(e.message)}</div>`);
+      out.push(`<div class="result err">✖ <b>${esc(it.label ?? it.name)}</b> · ${esc(e.message)}</div>`);
     }
   }
-  $('#uploadResult').innerHTML = out.join('') + '<p class="hint">가져온 날짜는 "손실 분석"에서 기간을 바꿔 확인하세요. 가져온 데이터에는 정지 사유가 비어 있으니 정지 기록에서 사유를 입력해 보세요.</p>';
+  $('#uploadResult').innerHTML = out.join('') + '<p class="hint">"손실 분석" 탭에서 기간을 바꿔 확인하세요. 가져온 데이터는 정지 사유가 비어 있어서, 정지 기록에서 직접 입력할 수 있어요.</p>';
   const cfg = await api('/api/config');
   CFG.dates = cfg.dates;
   loadData();
-};
+}
+
+// 내 파일: 끌어다 놓기 또는 눌러서 고르기
+const fromFiles = (list) => [...list].map((f) => ({ name: f.name, read: () => f.text() }));
+$('#file').onchange = () => { if ($('#file').files.length) importFiles(fromFiles($('#file').files)).finally(() => { $('#file').value = ''; }); };
+const dz = $('#dropzone');
+['dragenter', 'dragover'].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+['dragleave', 'drop'].forEach((t) => dz.addEventListener(t, () => dz.classList.remove('over')));
+dz.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) importFiles(fromFiles(e.dataTransfer.files)); });
+
+async function loadData() {
+  const s = await api('/api/samples');
+  $('#exDate').textContent = `${s.date} 하루치`;
+  exFiles = s.files.filter((f) => f.format !== 'truth');
+  renderExamples();
+  const imp = await api('/api/imports');
+  $('#imports').innerHTML = imp.length ? `<ul class="imp-list">${imp.slice(0, 8).map((i) => `<li><span class="ftype">${esc(sourceLabel(i.format))}</span><b>${esc(i.file)}</b><span class="muted">${[i.days ? `${i.days}개 설비·일` : '', i.defects ? `불량 ${i.defects}` : ''].filter(Boolean).join(' · ')}</span><time>${new Date(i.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></li>`).join('')}</ul>${imp.length > 8 ? `<p class="hint">최근 8건만 보여 줍니다 (전체 ${imp.length}건).</p>` : ''}` : '<p class="muted">아직 가져온 파일이 없습니다.</p>';
+  $('#realData').innerHTML = REAL_DATA.map((d) => `<li><a href="${d.url}" target="_blank" rel="noopener" title="${esc(d.note)}">${esc(d.name)}</a></li>`).join('');
+}
 $('#btnDemo').onclick = async () => {
   if (!confirm('저장된 데이터를 모두 지우고 최근 2주 데모 데이터를 다시 만들까요?')) return;
   const r = await api('/api/demo/reload', {});

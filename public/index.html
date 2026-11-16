@@ -75,7 +75,6 @@
       <div class="page-head">
         <div class="chip"><b>손실 분석</b>OEE를 시간·성능·품질로 나눠 봅니다</div>
         <h1>어디서, 왜, <em>얼마를</em> 잃었나</h1>
-        <div class="ticks"><span>손실 순위(시간·금액)</span><span>원인 패턴</span><span>시간대별 히트맵</span><span>사유 나중에 입력</span></div>
       </div>
       <div class="toolbar">
         <label>기간
@@ -97,10 +96,6 @@
         <div class="card"><h3>발견한 것 <small>원인 패턴</small></h3><div id="aInsights"></div></div>
       </div>
       <div class="card"><h3>시간대별 손실 <small>(분, 가용 손실 + 성능 손실)</small></h3><div id="aHourly"></div></div>
-      <div class="grid2">
-        <div class="card"><h3>설비 비교</h3><div id="aMachines"></div></div>
-        <div class="card"><h3>날짜별 OEE</h3><div id="aTrend"></div></div>
-      </div>
       <div class="card"><h3>정지 사유 집계</h3><div id="aReasons"></div></div>
       <div class="card">
         <div class="card-head">
@@ -115,6 +110,7 @@
             </select>
           </label>
         </div>
+        <div class="loss-filter" id="aLossFilter"></div>
         <div id="aStops"></div>
       </div>
       <div id="aWarnings"></div>
@@ -147,34 +143,47 @@
 
     <!-- 데이터 -->
     <section id="tab-data" class="tab">
-      <div class="page-head">
-        <div class="chip"><b>데이터 연결</b>CT 센서 · MTConnect · OPC UA · Modbus · MES</div>
-        <h1>데이터는 어디서든, <em>분석은 우리가</em></h1>
-      </div>
-      <div class="card">
-        <h3>파일 가져오기</h3>
-        <p class="muted">아래 형식 중 아무거나 올리면 같은 방식으로 분석합니다. 샘플은 실제 현장 형식을 흉내 낸 가상 데이터입니다.</p>
-        <div class="upload">
-          <input type="file" id="file" multiple accept=".csv,.xml,.json,.jsonl,.txt">
-          <select id="fileFormat">
-            <option value="auto">형식 자동 인식</option>
-            <option value="ct-csv">전류 센서 CSV</option>
-            <option value="mtconnect">MTConnect XML</option>
-            <option value="opcua">OPC UA JSON Lines</option>
-            <option value="modbus-csv">Modbus 폴링 CSV</option>
-            <option value="mes-csv">MES 작업일보 CSV</option>
-            <option value="defects-json">작업자 불량 입력 JSON</option>
-          </select>
-          <button id="btnUpload" class="primary">가져오기</button>
-          <button id="btnDemo" title="저장된 데이터를 지우고 최근 2주 데모 데이터를 다시 만듭니다">데모 데이터 다시 만들기</button>
+      <div class="page-head with-memo">
+        <div>
+          <div class="chip"><b>데이터 연결</b></div>
+          <h1>데이터는 어디서든, <em>분석은 우리가</em></h1>
         </div>
-        <div id="uploadResult"></div>
+        <aside class="memo" aria-label="실제 산업 데이터를 구할 수 있는 곳">
+          <div class="memo-head">📌 실제 데이터 구하는 곳</div>
+          <ul id="realData"></ul>
+        </aside>
       </div>
-      <div class="grid2">
-        <div class="card"><h3>샘플 파일 (가상 공장, 산업 표준 형식)</h3><div id="samples"></div></div>
-        <div class="card"><h3>가져오기 기록</h3><div id="imports"></div></div>
+      <div class="data-grid">
+        <!-- 왼쪽: 예시 파일 -->
+        <div class="card ex-card">
+          <div class="card-head">
+            <h3>예시 파일 <small id="exDate"></small></h3>
+            <button id="exImportAll" title="예시 파일을 모두 바로 분석에 넣습니다">전부 가져오기</button>
+          </div>
+          <table class="ex-table">
+            <thead><tr><th>이름</th><th>종류</th><th class="num">크기</th><th class="ex-act"></th></tr></thead>
+            <tbody id="exList"></tbody>
+          </table>
+        </div>
+
+        <!-- 오른쪽: 내 파일 올리기 -->
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="file" multiple accept=".csv,.xml,.json,.jsonl,.txt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+          <b>내 파일 올리기</b>
+          <span>CSV · XML · JSON 파일을 끌어다 놓거나<br>눌러서 고르세요</span>
+          <span class="dz-btn">파일 고르기</span>
+        </label>
       </div>
-      <div class="card"><h3>실제 산업 데이터를 구할 수 있는 곳</h3><div id="realData"></div></div>
+      <div id="uploadResult"></div>
+
+      <div class="card">
+        <h3>가져오기 기록</h3>
+        <div id="imports"></div>
+      </div>
+
+
+      <p class="reset-line">데이터가 지저분해졌나요? <button id="btnDemo" class="link" title="저장된 데이터를 지우고 최근 2주 데모 데이터를 다시 만듭니다">데모 데이터로 처음 상태 되돌리기</button></p>
     </section>
   </main>
 
@@ -191,6 +200,16 @@
         <button id="qSend" class="primary">보내기</button>
       </div>
       <div class="chat-foot"><button id="qLater">나중에</button></div>
+    </div>
+  </div>
+  <!-- 예시 파일 미리보기 -->
+  <div class="modal" id="viewer" hidden>
+    <div class="viewer">
+      <div class="viewer-head">
+        <div><b id="vTitle"></b><div class="hint" id="vMeta"></div></div>
+        <div class="viewer-actions"><a class="btn" id="vSave" download>저장</a><button id="vClose" aria-label="닫기">✕</button></div>
+      </div>
+      <pre id="vBody"></pre>
     </div>
   </div>
   <div class="toast" id="toast" hidden></div>
