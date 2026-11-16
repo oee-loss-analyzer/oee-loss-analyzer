@@ -114,7 +114,7 @@ function renderLive() {
   if (!wrap.children.length) {
     wrap.innerHTML = CFG.machines.map((m) => `<div class="mcard" id="mc-${m.id}">
       <div class="mhead"><div class="mname">${esc(m.name)}</div><span class="badge">-</span></div>
-      <div class="mbody"><div class="amp">-</div><svg class="spark" viewBox="0 0 120 44" preserveAspectRatio="none"><polyline fill="none" stroke="#1f5fbf" stroke-width="1.4" points=""/></svg></div>
+      <div class="mbody"><div class="amp">-</div><svg class="spark" viewBox="0 0 120 44" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.6" points=""/></svg></div>
       <div class="mstats"></div><div class="mtl"></div>
       <div class="mactions">
         <button data-defect="${m.id}">불량 +1</button>
