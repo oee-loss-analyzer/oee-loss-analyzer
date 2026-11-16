@@ -200,8 +200,6 @@ main { padding: 28px 20px 80px; max-width: 1400px; margin: 0 auto; }
 .spark polyline { vector-effect: non-scaling-stroke; stroke-width: 1.75px; stroke-linejoin: round; }
 .mstats { display: flex; gap: 14px; color: var(--muted); font-size: 12.5px; flex-wrap: wrap; }
 .mstats b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.mactions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-.mactions select, .mactions button { font-size: 12.5px; padding: 5px 10px; }
 
 /* 타임라인 */
 .tl { position: relative; height: 14px; background: var(--track); border-radius: 99px; overflow: hidden; margin-top: 10px; }

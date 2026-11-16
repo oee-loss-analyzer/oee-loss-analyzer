@@ -115,15 +115,7 @@ function renderLive() {
     wrap.innerHTML = CFG.machines.map((m) => `<div class="mcard" id="mc-${m.id}">
       <div class="mhead"><div class="mname">${esc(m.name)}</div><span class="badge">-</span></div>
       <div class="mbody"><div class="amp">-</div><svg class="spark" viewBox="0 0 120 44" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="1.6" points=""/></svg></div>
-      <div class="mstats"></div><div class="mtl"></div>
-      <div class="mactions">
-        <button data-defect="${m.id}">불량 +1</button>
-        <select data-inject-code="${m.id}">
-          <option value="SETUP|12">금형·공구 교체 12분</option><option value="BREAKDOWN|25">고장 25분</option>
-          <option value="MATERIAL|10">자재 대기 10분</option><option value="JAM|3">걸림 3분</option>
-        </select>
-        <button data-inject="${m.id}">지금 멈추기</button>
-      </div></div>`).join('');
+      <div class="mstats"></div><div class="mtl"></div></div>`).join('');
   }
   for (const m of LIVE.machines) {
     const el = $(`#mc-${m.id}`);
@@ -165,20 +157,6 @@ async function refreshLiveAnalysis() {
     liveFetchBusy = false;
   }
 }
-
-$('#liveMachines').addEventListener('click', async (e) => {
-  const d = e.target.closest('[data-defect]');
-  const inj = e.target.closest('[data-inject]');
-  try {
-    if (d) { await api('/api/live/defect', { machineId: d.dataset.defect }); toast('불량 1개를 기록했습니다.'); }
-    if (inj) {
-      const [code, minutes] = $(`[data-inject-code="${inj.dataset.inject}"]`).value.split('|');
-      await api('/api/live/inject', { machineId: inj.dataset.inject, code, minutes: Number(minutes) });
-      toast(`지금부터 ${minutes}분 멈춥니다. 2분이 지나면 작업자에게 질문이 갑니다.`);
-      if (!LIVE.running) await api('/api/live/start', {});
-    }
-  } catch (err) { toast(err.message); }
-});
 
 $('#btnStart').onclick = () => api('/api/live/start', {}).catch((e) => toast(e.message));
 $('#btnPause').onclick = () => api('/api/live/pause', {});
