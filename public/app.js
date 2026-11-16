@@ -388,7 +388,6 @@ $('#tabs').onclick = (e) => {
 
 async function init() {
   CFG = await api('/api/config');
-  $('#factoryName').textContent = `${CFG.factory.name} · 근무 ${clock(CFG.shift.start)}~${clock(CFG.shift.end)} (점심 제외)`;
   $('#llmBadge').textContent = CFG.llm.enabled ? `사유 분류: Claude (${CFG.llm.model})` : '사유 분류: 규칙 기반 (API 키 없음)';
   $('#llmBadge').classList.toggle('on', CFG.llm.enabled);
   $('#aMachine').innerHTML += CFG.machines.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
