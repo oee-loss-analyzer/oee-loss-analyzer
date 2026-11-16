@@ -38,6 +38,8 @@ main { padding: 16px 20px 60px; max-width: 1400px; margin: 0 auto; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: var(--shadow); min-width: 0; }
 .card h3 { margin: 0 0 10px; font-size: 15px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.card-head .sort { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .grid2 > .card { margin-bottom: 14px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }

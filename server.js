@@ -72,7 +72,7 @@ function analysis(q) {
     warnings: [...new Set(results.flatMap((r) => r.warnings))],
     sources: [...new Set(results.map((r) => r.source))],
     stops: results.flatMap((r) => r.stops.map((s) => ({ ...s, machineId: r.machineId, date: r.date })))
-      .sort((a, b) => (a.date === b.date ? (b.start ?? 0) - (a.start ?? 0) : b.date.localeCompare(a.date))).slice(0, 400),
+      .sort((a, b) => (a.date === b.date ? (b.start ?? 0) - (a.start ?? 0) : b.date.localeCompare(a.date))).slice(0, 3000),
     days: results.map((r) => ({ machineId: r.machineId, date: r.date, source: r.source, oee: r.oee, availability: r.availability, performance: r.performance, quality: r.quality, count: r.count, defectCount: r.defectCount, untilSec: r.untilSec })),
     timelines: from === to ? store.listDays({ from, to }).map((d) => ({ machineId: d.machineId, timeline: d.timeline, untilSec: d.untilSec })) : [],
   };

@@ -83,7 +83,21 @@
         <div class="card"><h3>날짜별 OEE</h3><div id="aTrend"></div></div>
       </div>
       <div class="card"><h3>정지 사유 집계</h3><div id="aReasons"></div></div>
-      <div class="card"><h3>정지 기록 <small>사유가 비어 있으면 여기서 입력할 수 있습니다</small></h3><div id="aStops"></div></div>
+      <div class="card">
+        <div class="card-head">
+          <h3>정지 기록 <small>사유가 비어 있으면 여기서 입력할 수 있습니다</small></h3>
+          <label class="sort">정렬
+            <select id="aSort">
+              <option value="time-asc" selected>시간순 (이른 시각부터)</option>
+              <option value="time-desc">최신순 (늦은 시각부터)</option>
+              <option value="dur-desc">정지 시간 긴 순</option>
+              <option value="machine">설비별 → 시간순</option>
+              <option value="loss">손실 분류별 → 시간순</option>
+            </select>
+          </label>
+        </div>
+        <div id="aStops"></div>
+      </div>
       <div id="aWarnings"></div>
     </section>
 

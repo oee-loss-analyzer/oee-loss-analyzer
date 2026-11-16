@@ -281,11 +281,30 @@ async function loadAnalysis() {
   $('#aReasons').innerHTML = `<table><thead><tr><th>사유</th><th>손실 분류</th><th class="num">횟수</th><th class="num">합계</th><th>작업자 답변 예</th></tr></thead><tbody>
     ${a.reasons.map((r) => `<tr><td>${esc(r.label)}</td><td>${lossTag(r.loss)}</td><td class="num">${r.count}</td><td class="num">${hrs(r.sec)}</td><td class="muted">${r.examples.map((x) => `“${esc(x)}”`).join(' ')}</td></tr>`).join('')}</tbody></table>`;
 
-  $('#aStops').innerHTML = stopsTable(a.stops);
+  lastStops = a.stops;
+  renderStops();
   $('#aWarnings').innerHTML = a.warnings.map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('');
 }
 $('#aPreset').onchange = loadAnalysis;
 $('#aMachine').onchange = loadAnalysis;
+
+// 정지 기록 정렬 (화면에서만 바꾼다)
+let lastStops = [];
+const LOSS_ORDER = ['breakdown', 'setup', 'waiting', 'other_stop', 'unknown', 'minor_stop', 'speed', 'defect', 'startup'];
+const machineOrder = (id) => CFG.machines.findIndex((m) => m.id === id);
+function renderStops() {
+  const byTime = (x, y) => x.date.localeCompare(y.date) || (x.start ?? Infinity) - (y.start ?? Infinity);
+  const sorters = {
+    'time-asc': byTime,
+    'time-desc': (x, y) => byTime(y, x),
+    'dur-desc': (x, y) => y.dur - x.dur || byTime(x, y),
+    machine: (x, y) => machineOrder(x.machineId) - machineOrder(y.machineId) || byTime(x, y), // 1·2·3호기 순서
+    loss: (x, y) => LOSS_ORDER.indexOf(x.loss) - LOSS_ORDER.indexOf(y.loss) || byTime(x, y),
+  };
+  const sorted = [...lastStops].sort(sorters[$('#aSort').value] ?? byTime);
+  $('#aStops').innerHTML = stopsTable(sorted);
+}
+$('#aSort').onchange = renderStops;
 
 function sourceLabel(s) {
   return { 'ct-csv': '전류 센서 CSV', mtconnect: 'MTConnect', opcua: 'OPC UA', 'modbus-csv': 'Modbus', 'mes-csv': 'MES 작업일보', 'live-ct': '실시간 전류 센서', test: '테스트' }[s] ?? s;
