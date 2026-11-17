@@ -723,7 +723,16 @@ $('#uploadResult').onclick = (e) => {
 };
 
 // 내 파일: 끌어다 놓기 또는 눌러서 고르기
-const fromFiles = (list) => [...list].map((f) => ({ name: f.name, read: () => f.text() }));
+// 파일 글자 읽기: UTF-8이 아니면 한국 엑셀이 저장하는 EUC-KR(CP949)로 다시 읽는다
+async function readFileText(f) {
+  const buf = await f.arrayBuffer();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('euc-kr').decode(buf);
+  }
+}
+const fromFiles = (list) => [...list].map((f) => ({ name: f.name, read: () => readFileText(f) }));
 $('#file').onchange = () => { if ($('#file').files.length) importFiles(fromFiles($('#file').files)).finally(() => { $('#file').value = ''; }); };
 const dz = $('#dropzone');
 ['dragenter', 'dragover'].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.add('over'); }));

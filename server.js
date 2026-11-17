@@ -89,6 +89,10 @@ function checkImport(days, defects, attached) {
 // 파일 내용을 읽어 저장하고 점검 결과를 붙여 돌려준다 (내 파일 · 예시 파일 공통)
 function importText(content, { format: fmt, filename } = {}) {
   const { format, days, defects } = parseFile(content, { format: fmt, filename });
+  // 머리줄은 맞는데 읽은 기록이 하나도 없으면 "정상"으로 넘기지 않는다 (날짜·시각 형식이 다르거나 내용이 비었을 때)
+  if (!days.length && !defects.length) {
+    throw httpError(400, `형식(${format})은 맞지만 읽을 수 있는 기록이 없어요. 날짜·시각이 2026-11-13 08:00 또는 2026-11-13T08:00:00+09:00 형태인지, 내용 줄이 있는지 확인하세요.`);
+  }
   for (const d of days) {
     const old = store.getDay(d.machineId, d.date);
     if (old?.defects?.length && !d.defects.length) { d.defects = old.defects; d.defectCount = old.defectCount; }
