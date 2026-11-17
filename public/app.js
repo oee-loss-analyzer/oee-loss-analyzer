@@ -81,13 +81,29 @@ function methodLabel(r) {
 function stopsTable(stops, { withDate = true, answerable = true } = {}) {
   if (!stops.length) return '<p class="muted">정지 기록이 없습니다.</p>';
   const name = (id) => CFG.machines.find((m) => m.id === id)?.name ?? id;
-  return `<div class="scroll"><table><thead><tr>${withDate ? '<th>날짜</th>' : ''}<th>설비</th><th>시각</th><th class="num">시간</th><th>손실 분류</th><th>작업자 답변</th><th></th></tr></thead><tbody>
+  const reasonLabel = (code) => CFG.reasons.find((r) => r.code === code)?.label;
+  // 작업자 답변: 직접 말한 문장, 버튼으로 골랐으면 고른 사유 이름을 보여 준다
+  const answer = (s) => {
+    if (s.reason?.text) return `<div class="say">“${esc(s.reason.text)}”</div>`;
+    if (s.reason?.code) return `<div class="say">“${esc(reasonLabel(s.reason.code) ?? s.reason.code)}”</div>`;
+    if (s.reason) return '';
+    if (s.text) return `<span class="muted">${esc(s.text)}</span>`;
+    if (s.hint) return `<span class="muted">신호: ${esc(s.hint)}</span>`;
+    return '<span class="muted">답변 없음</span>';
+  };
+  const editBtn = (s) => {
+    if (!answerable || s.loss === 'minor_stop') return '';
+    const has = Boolean(s.reason?.code);
+    const data = { machineId: s.machineId, date: s.date, stopId: s.group ?? s.id, start: s.start, hint: s.hint, dur: s.dur, text: s.text, current: has ? { code: s.reason.code, text: s.reason.text ?? '' } : null };
+    return `<button class="ans${has ? ' edit' : ''}" data-stop='${esc(JSON.stringify(data))}'>${has ? '✎ 수정' : '사유 입력'}</button>`;
+  };
+  return `<div class="scroll"><table><thead><tr>${withDate ? '<th>날짜</th>' : ''}<th>설비</th><th>시각</th><th class="num">시간</th><th>손실 분류</th><th>작업자 답변</th>${answerable ? '<th>사유 작성</th>' : ''}</tr></thead><tbody>
   ${stops.map((s) => `<tr>${withDate ? `<td>${s.date.slice(5)}</td>` : ''}<td>${esc(name(s.machineId))}</td>
     <td>${s.start == null ? '<span class="muted">작업일보</span>' : `${clock(s.start)}${s.ongoing ? ' <b style="color:var(--stop)">진행 중</b>' : ''}`}</td>
     <td class="num">${Math.round(s.dur / 60)}분</td><td>${lossTag(s.loss)}</td>
-    <td>${s.reason?.text ? `“${esc(s.reason.text)}”` : s.reason ? '' : s.text ? `<span class="muted">${esc(s.text)}</span>` : s.hint ? `<span class="muted">신호: ${esc(s.hint)}</span>` : ''}
+    <td>${answer(s)}
       ${s.reason ? `<div class="method">${methodLabel(s.reason)}${s.reason.confidence != null && s.reason.method !== 'button' ? ` · 확신 ${Math.round(s.reason.confidence * 100)}%` : ''}${s.reason.summary ? ` · ${esc(s.reason.summary)}` : ''}</div>` : ''}</td>
-    <td>${answerable && (!s.reason || !s.reason.code) && s.loss !== 'minor_stop' ? `<button class="ans" data-stop='${esc(JSON.stringify({ machineId: s.machineId, date: s.date, stopId: s.group ?? s.id, start: s.start, hint: s.hint, dur: s.dur, text: s.text }))}'>사유 입력</button>` : ''}</td></tr>`).join('')}
+    ${answerable ? `<td>${editBtn(s)}</td>` : ''}</tr>`).join('')}
   </tbody></table></div>`;
 }
 
@@ -96,7 +112,7 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   const s = JSON.parse(b.dataset.stop);
   pendingStopAnswer = s;
-  openQuestion({ machineId: s.machineId, start: s.start, hint: s.hint, manual: true, dur: s.dur, date: s.date, text: s.text });
+  openQuestion({ machineId: s.machineId, start: s.start, hint: s.hint, manual: true, dur: s.dur, date: s.date, text: s.text, current: s.current });
 });
 
 // ---------- 실시간 ----------
@@ -188,12 +204,14 @@ function openQuestion(q) {
   qActive = q;
   const m = CFG.machines.find((x) => x.id === q.machineId);
   const when = q.start == null ? '작업일보에 적힌 비가동' : `${clock(q.start)}부터`;
+  const cur = q.current;
   $('#qText').innerHTML = q.manual
-    ? `${esc(m.name)}이(가) ${q.date ?? ''} ${when} ${Math.round((q.dur ?? 0) / 60)}분 멈췄어요.<br>이유를 알려 주세요.`
+    ? `${esc(m.name)}이(가) ${q.date ?? ''} ${when} ${Math.round((q.dur ?? 0) / 60)}분 멈췄어요.<br>${cur ? '사유를 고쳐 주세요.' : '이유를 알려 주세요.'}`
     : `${esc(m.name)}이(가) ${when} 멈춰 있어요.<br>이유가 뭔가요?`;
-  $('#qHint').textContent = [q.hint ? `설비 신호: ${q.hint}` : '', q.text ? `작업일보 기록: ${q.text}` : ''].filter(Boolean).join(' · ');
-  $('#qButtons').innerHTML = CFG.reasons.map((r) => `<button data-code="${r.code}">${esc(r.label)}</button>`).join('');
-  $('#qInput').value = '';
+  const curLabel = cur ? CFG.reasons.find((r) => r.code === cur.code)?.label : null;
+  $('#qHint').textContent = [curLabel ? `지금 사유: ${curLabel}${cur.text ? ` (“${cur.text}”)` : ''}` : '', q.hint ? `설비 신호: ${q.hint}` : '', q.text ? `작업일보 기록: ${q.text}` : ''].filter(Boolean).join(' · ');
+  $('#qButtons').innerHTML = CFG.reasons.map((r) => `<button data-code="${r.code}"${cur?.code === r.code ? ' class="on"' : ''}>${esc(r.label)}</button>`).join('');
+  $('#qInput').value = cur?.text ?? '';
   $('#qModal').hidden = false;
 }
 function closeQuestion() {
