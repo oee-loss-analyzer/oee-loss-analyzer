@@ -35,6 +35,7 @@ export function sampleDates(range) {
 }
 
 const truthCache = new Map();
+export function sampleTruth(m, date) { return truth(m, date); }
 function truth(m, date) {
   const k = `${m.id}|${date}`;
   if (!truthCache.has(k)) truthCache.set(k, simulateDay(m, date, { seed: `sample|${m.id}|${date}` }));

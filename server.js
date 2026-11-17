@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { MACHINES, REASONS, LOSS, SHIFT, DETECTION, FACTORY } from './src/config.js';
 import { Store } from './src/store.js';
 import { LiveEngine } from './src/live.js';
-import { listSamples, buildSampleText, sampleFileName, SAMPLE_FILES } from './src/sampleSets.js';
+import { listSamples, buildSampleText, sampleFileName, sampleTruth, SAMPLE_FILES } from './src/sampleSets.js';
+import { simulateAnswers } from './src/demo.js';
 import { parseFile } from './src/ingest/parsers.js';
 import { aggregate } from './src/core/oee.js';
 import { hourlyLoss, reasonStats, machineStats, dailyTrend, findInsights, buildReport } from './src/core/insights.js';
@@ -200,7 +201,9 @@ const routes = {
   'POST /api/samples/import': (b) => {
     const f = SAMPLE_FILES.find((x) => x.key === b.key);
     if (!f) throw httpError(404, '알 수 없는 예시 파일입니다.');
-    return importText(buildSampleText(b.range, b.key), { format: f.format, filename: sampleFileName(b.range, b.key) });
+    const res = importText(buildSampleText(b.range, b.key), { format: f.format, filename: sampleFileName(b.range, b.key) });
+    res.answers = attachSampleAnswers(res.imported);
+    return res;
   },
   'GET /api/imports': () => store.imports.slice(-30).reverse(),
   'GET /api/samples': (_, q) => listSamples(q.range ?? '1d'),
@@ -210,6 +213,24 @@ const routes = {
     return { ok: true };
   },
 };
+
+// 예시 파일은 설비 신호만 담고 있으니, 현장에서 작업자가 카톡으로 답했을 법한 문장을 함께 붙인다
+// (사람이 직접 입력한 사유는 덮어쓰지 않는다. 다시 가져오면 importText가 지난번 것을 지우고 새로 붙인다)
+function attachSampleAnswers(imported) {
+  let n = 0;
+  for (const { machineId, date } of imported ?? []) {
+    const day = store.getDay(machineId, date);
+    const m = MACHINES.find((x) => x.id === machineId);
+    if (!day || !m || day.kind === 'summary') continue;
+    for (const r of simulateAnswers(day, sampleTruth(m, date))) {
+      if (store.reasons.some((x) => x.machineId === r.machineId && x.date === r.date && x.stopId === r.stopId && x.by !== 'import')) continue;
+      store.addReason({ ...r, by: 'import' }, { silent: true });
+      n++;
+    }
+  }
+  if (n) store.save();
+  return n;
+}
 
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
