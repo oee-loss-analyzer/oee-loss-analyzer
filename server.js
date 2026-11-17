@@ -13,7 +13,7 @@ import { listSamples, buildSampleText, sampleFileName, SAMPLE_FILES } from './sr
 import { parseFile } from './src/ingest/parsers.js';
 import { aggregate } from './src/core/oee.js';
 import { hourlyLoss, reasonStats, machineStats, dailyTrend, findInsights, buildReport } from './src/core/insights.js';
-import { classifyReason, classifyByRules, llmEnabled, writeReportWithClaude, LLM_MODEL } from './src/reasons/classifier.js';
+import { classifyReason, classifyByRules, stripNotes, llmEnabled, writeReportWithClaude, LLM_MODEL } from './src/reasons/classifier.js';
 import { generateSamples } from './scripts/generate-samples.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -93,10 +93,12 @@ function importText(content, { format: fmt, filename } = {}) {
     const old = store.getDay(d.machineId, d.date);
     if (old?.defects?.length && !d.defects.length) { d.defects = old.defects; d.defectCount = old.defectCount; }
     store.upsertDay(d);
+    // 같은 설비·날짜를 다시 가져오면, 지난번 가져오기가 자동으로 붙인 사유는 지운다 (사람이 입력한 사유는 남긴다)
+    store.reasons = store.reasons.filter((x) => !(x.by === 'import' && x.machineId === d.machineId && x.date === d.date));
     // 작업일보처럼 사유를 글로 적어 둔 정지는 가져올 때 바로 분류한다 (작업자 카톡 답변과 같은 규칙)
     if (d.kind === 'summary') {
       for (const s of d.stops) {
-        if (!s.text) continue;
+        if (!stripNotes(s.text)) continue; // 사유 없이 [시각] 메모만 있으면 "사유 미입력"으로 둔다
         const c = classifyByRules(s.text);
         store.addReason({ machineId: d.machineId, date: d.date, stopId: s.group, start: null, code: c.code, text: s.text, method: 'rule', confidence: c.confidence, by: 'import' }, { silent: true });
       }

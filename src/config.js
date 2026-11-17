@@ -41,6 +41,18 @@ export const MACHINES = [
     id: 'CLAY-LINE', name: '벽돌 라인', type: 'line',
     idealCycleSec: 0.46, marginPerPart: 30, source: 'mes', sim: false,
   },
+  // 공개 데이터: 음료 충전 라인 (Zenodo 18146866, 브라질, CC BY 4.0). 하루 요약 + 정지 기록(사유 없음).
+  //  idealCycleSec 는 원본에서 가장 빨랐던 시간대(3L 약 744개/시간)에서 잡았다. 5L 날은 성능가동률이 낮게 나온다.
+  {
+    id: 'FILL-LINE', name: '충전 라인', type: 'line',
+    idealCycleSec: 4.8, marginPerPart: 400, source: 'mes', sim: false,
+  },
+  // 공개 데이터: 포장기 (Zenodo 7071747 PIADE의 s_1, 이탈리아, CC BY 4.0). 상태 구간 + 알람 코드 + 산출 카운터.
+  //  idealCycleSec 는 원본의 최고 속도(5,000개/시간)에서 잡았다.
+  {
+    id: 'PACK-01', name: '포장기', type: 'packaging',
+    idealCycleSec: 0.72, marginPerPart: 20, source: 'opcua', sim: false,
+  },
 ];
 
 // 가상 공장 시뮬레이터(실시간 현장 · 예시 파일)가 돌리는 설비

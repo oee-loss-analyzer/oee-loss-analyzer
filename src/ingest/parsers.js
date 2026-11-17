@@ -146,7 +146,7 @@ export function parseOpcua(text, forcedMachine) {
       const st = r.payload.MachineState?.Value;
       if (st != null) {
         const alarm = r.payload.AlarmText?.Value;
-        const hint = st === 3 ? `알람 ${alarm || ''}`.trim() : st === 4 ? '셋업 모드' : st === 0 ? '전원 꺼짐' : null;
+        const hint = st === 3 ? `알람 ${alarm || ''}`.trim() : st === 4 ? (alarm || '셋업 모드') : st === 0 ? '전원 꺼짐' : null;
         stateEvents.push({ t: r.sec, running: st === 2, hint });
       }
       const shot = r.payload.ShotCounter?.Value;
@@ -236,7 +236,8 @@ export function parseMes(text) {
       for (const part of parts) {
         const mm = /(\d+)\s*분?$/.exec(part);
         if (mm) {
-          downtimes.push({ dur: Number(mm[1]) * 60, text: part.replace(mm[0], '').trim() });
+          // 끝의 "분" 숫자만 잘라 낸다 (replace는 앞쪽의 같은 숫자를 지울 수 있다: "[15:56~15:59] 9")
+          downtimes.push({ dur: Number(mm[1]) * 60, text: part.slice(0, mm.index).trim() });
           used += Number(mm[1]);
         } else noMin.push(part);
       }

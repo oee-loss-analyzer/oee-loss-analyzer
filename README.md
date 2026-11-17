@@ -79,6 +79,20 @@ npm start
 - 정지마다 라인 안의 위치(압출 프레스, 적재 스테이션, 건조기 등)를 `기계 고장 [압출 프레스] 12`처럼 붙여 둡니다. 정지 기록에서 어디서 멈췄는지 볼 수 있습니다.
 - 작업일보의 비가동사유 글은 가져올 때 사유 분류 규칙으로 바로 분류됩니다(예시 MES 작업일보도 같습니다). `[ ]` 안의 글은 위치·메모로 보고 분류에 쓰지 않습니다.
 
+### 다른 공개 데이터 2가지
+
+| 데이터 | 원본 | 변환 | 설비 | 특징 |
+|---|---|---|---|---|
+| 음료 충전 라인 (브라질, 2022-07 ~ 2023-02) | [Zenodo 18146866](https://doi.org/10.5281/zenodo.18146866) `production_raw.xlsx` | `node scripts/convert-bottling.js <production_raw.xlsx>` → `bottling_작업일보.csv` (50일) | 충전 라인 `FILL-LINE` | 정지 1,317건에 시각만 있고 **사유가 없음** → 전부 "사유 미입력". 사유 입력 시연에 맞습니다 |
+| 포장기 (이탈리아, PIADE s_1) | [Zenodo 7071747](https://doi.org/10.5281/zenodo.7071747) `raw_data.csv` | `node scripts/convert-piade.js <raw_data.csv> --machine s_1 --from 2021-02-08 --days 5` → OPC UA JSON Lines | 포장기 `PACK-01` | 실제 상태 변화와 **알람 코드**(예: A_065)가 정지 신호로 보입니다 |
+
+- 충전 라인: 날마다 원본의 가동 비율(operation ÷ monitored)이 그대로 나오도록 8시간 근무로 환산하고, 생산 수량도 같은 비율로 늘려 시간당 속도를 유지합니다. 같은 날 3L·5L 요약 두 줄은 더합니다. 불량 수량은 원본에 없어 0입니다. 이론 사이클은 가장 빨랐던 시간대(3L 약 744개/시간) 기준이라 5L 날은 성능가동률이 낮게 나옵니다.
+- 포장기: 공장 현지 시각(이탈리아) 08:00~12:00, 13:00~17:00만 잘라 그대로 얹습니다(점심 수량 제외). production·performance_loss는 가동, idle은 대기, downtime은 알람, scheduled_downtime은 계획 정지로 바꿉니다. 이론 사이클은 원본 최고 속도(5,000개/시간) 기준입니다.
+
+출처
+- G. A. David, P. M. de C. Monson, C. Soares Junior, *Industrial Production Time-Series Dataset from a Beverage Bottling Line (2022–2023)*, Zenodo, 2026. https://doi.org/10.5281/zenodo.18146866 (CC BY 4.0)
+- D. Tosato, E. Convento, C. Masiero, G. A. Susto, A. Beghi, *Packaging Industry Anomaly DEtection (PIADE) Dataset*, Zenodo, 2022. https://doi.org/10.5281/zenodo.7071747 (CC BY 4.0)
+
 ## 데이터 형식: "데이터는 어디서든, 분석은 우리가"
 
 가상 공장 시뮬레이터(`src/sim/factory.js`)가 설비의 하루를 만들고(정지와 사유, 사이클, 순간정지, 오후 속도 저하, 셋업 직후 불량), `src/sim/formats.js`가 그 하루를 현장에서 실제로 쓰는 형식으로 내보냅니다. `src/ingest/parsers.js`는 그 형식을 다시 읽어 같은 표준 형태(DayRecord)로 바꿉니다. 테스트에서는 내보낸 데이터를 다시 읽었을 때 정답과 맞는지 확인합니다.
@@ -125,6 +139,8 @@ src/live.js              실시간 모드 (빨리 감기, 질문 만들기)
 src/demo.js              작업자 답변 흉내 · 평일 날짜 계산
 src/sampleSets.js        예시 파일 묶음 (하루치·일주일치)
 scripts/convert-heavy-clay.js  공개 데이터(벽돌 라인) → 작업일보 CSV 변환
+scripts/convert-bottling.js    공개 데이터(음료 충전 라인, xlsx) → 작업일보 CSV 변환
+scripts/convert-piade.js       공개 데이터(포장기 PIADE) → OPC UA JSON Lines 변환
 public/                  화면 (HTML/CSS/JS)
 test/                    node:test 테스트
 ```
