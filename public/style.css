@@ -229,7 +229,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .heat td { text-align: center; font-variant-numeric: tabular-nums; font-size: 12.5px; border-bottom: 2px solid var(--card); border-right: 2px solid var(--card); }
 .tag { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; color: #fff; white-space: nowrap; }
 .method { font: 11px var(--mono); color: var(--muted); }
-.say { font-weight: 600; color: var(--ink); }
+/* 작업자 답변: 큰 따옴표 문장 + 아래 작은 분류 줄 */
+.say { font-size: 14.5px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; line-height: 1.35; }
+.say + .method { margin-top: 4px; font-size: 12px; letter-spacing: 0.08em; }
+.method b { color: var(--ink); font-weight: 800; letter-spacing: 0; }
 button.ans { padding: 5px 10px; font-size: 12.5px; white-space: nowrap; }
 button.ans.edit { background: transparent; color: var(--ink-2); }
 

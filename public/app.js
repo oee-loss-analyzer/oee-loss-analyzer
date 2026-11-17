@@ -102,7 +102,7 @@ function stopsTable(stops, { withDate = true, answerable = true } = {}) {
     <td>${s.start == null ? '<span class="muted">작업일보</span>' : `${clock(s.start)}${s.ongoing ? ' <b style="color:var(--stop)">진행 중</b>' : ''}`}</td>
     <td class="num">${Math.round(s.dur / 60)}분</td><td>${lossTag(s.loss)}</td>
     <td>${answer(s)}
-      ${s.reason ? `<div class="method">${methodLabel(s.reason)}${s.reason.confidence != null && s.reason.method !== 'button' ? ` · 확신 ${Math.round(s.reason.confidence * 100)}%` : ''}${s.reason.summary ? ` · ${esc(s.reason.summary)}` : ''}</div>` : ''}</td>
+      ${s.reason ? `<div class="method">${methodLabel(s.reason)}${s.reason.confidence != null && s.reason.method !== 'button' ? ` · 확신 <b>${Math.round(s.reason.confidence * 100)}%</b>` : ''}${s.reason.summary ? ` · ${esc(s.reason.summary)}` : ''}</div>` : ''}</td>
     ${answerable ? `<td>${editBtn(s)}</td>` : ''}</tr>`).join('')}
   </tbody></table></div>`;
 }
