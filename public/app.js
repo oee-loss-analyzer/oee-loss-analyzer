@@ -92,7 +92,8 @@ function stopsTable(stops, { withDate = true, answerable = true } = {}) {
     return '<span class="muted">답변 없음</span>';
   };
   const editBtn = (s) => {
-    if (!answerable || s.loss === 'minor_stop') return '';
+    // 순간정지도 사유를 넣거나 고칠 수 있다 (짧은 정지라도 반복되면 원인을 알아야 하므로)
+    if (!answerable) return '';
     const has = Boolean(s.reason?.code);
     const data = { machineId: s.machineId, date: s.date, stopId: s.group ?? s.id, start: s.start, hint: s.hint, dur: s.dur, text: s.text, current: has ? { code: s.reason.code, text: s.reason.text ?? '' } : null };
     return `<button class="ans${has ? ' edit' : ''}" data-stop='${esc(JSON.stringify(data))}'>${has ? '✎ 수정' : '사유 입력'}</button>`;
